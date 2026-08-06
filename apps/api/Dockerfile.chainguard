@@ -1,0 +1,36 @@
+# Experimental Chainguard-style runtime image
+# Build with:
+#   docker build -f apps/api/Dockerfile.chainguard -t mdmtapcard-api:chainguard apps/api
+
+FROM cgr.dev/chainguard/python:latest-dev AS builder
+
+USER root
+WORKDIR /app
+
+# Build deps for packages that may need native compilation
+RUN apk add --no-cache build-base postgresql-dev
+
+COPY requirements.txt .
+
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --no-cache-dir -r requirements.txt \
+    && python -m pip uninstall -y pip setuptools wheel
+
+COPY . /app
+
+FROM cgr.dev/chainguard/python:latest
+
+WORKDIR /app
+ENV PATH=/opt/venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app /app
+
+EXPOSE 8000
+
+ENTRYPOINT ["/opt/venv/bin/python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

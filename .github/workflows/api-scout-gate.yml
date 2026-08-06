@@ -1,0 +1,90 @@
+name: API Scout Gate
+
+on:
+  pull_request:
+    paths:
+      - apps/api/**
+      - docker-compose.yml
+      - scripts/scout_gate.py
+      - security/scout_unfixed_os_exceptions.json
+      - .github/workflows/api-scout-gate.yml
+  push:
+    branches:
+      - main
+    paths:
+      - apps/api/**
+      - docker-compose.yml
+      - scripts/scout_gate.py
+      - security/scout_unfixed_os_exceptions.json
+      - .github/workflows/api-scout-gate.yml
+
+jobs:
+  scout-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Docker Scout CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker scout version >/dev/null 2>&1; then
+            echo "Docker Scout already available"
+            docker scout version
+            exit 0
+          fi
+
+          mkdir -p ~/.docker/cli-plugins
+          curl -fsSL "https://github.com/docker/scout-cli/releases/latest/download/docker-scout_linux_amd64" -o ~/.docker/cli-plugins/docker-scout
+          chmod +x ~/.docker/cli-plugins/docker-scout
+          docker scout version
+
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t mdmtapcard-api:ci apps/api
+
+      - name: Show Scout recommendations
+        run: docker scout recommendations mdmtapcard-api:ci
+
+      - name: Enforce Scout gate (fixable critical/high only)
+        run: python3 scripts/scout_gate.py --image mdmtapcard-api:ci --exceptions-file security/scout_unfixed_os_exceptions.json
+
+  chainguard-compat:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Attempt Chainguard compatibility build (informational)
+        shell: bash
+        run: |
+          set +e
+          docker build -f apps/api/Dockerfile.chainguard -t mdmtapcard-api:chainguard-ci apps/api 2>&1 | tee chainguard-build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            echo "CHAINGUARD_STATUS=passed" >> "$GITHUB_ENV"
+          else
+            echo "CHAINGUARD_STATUS=failed" >> "$GITHUB_ENV"
+          fi
+          exit 0
+
+      - name: Summarize Chainguard compatibility
+        shell: bash
+        run: |
+          if [ "${CHAINGUARD_STATUS}" = "passed" ]; then
+            echo "Chainguard compatibility build passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Status: PASSED"
+          else
+            echo "Chainguard compatibility build failed (non-blocking informational job)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Inspect chainguard-build.log artifact for details." >> "$GITHUB_STEP_SUMMARY"
+            echo "Status: FAILED (informational)"
+          fi
+
+      - name: Upload Chainguard build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chainguard-build-log
+          path: chainguard-build.log

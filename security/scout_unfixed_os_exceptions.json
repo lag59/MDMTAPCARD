@@ -1,0 +1,24 @@
+{
+  "allowed_cves": {
+    "CVE-2026-13221": {
+      "package": "perl",
+      "reason": "Debian trixie package vulnerability currently marked not fixed by Scout",
+      "review_by": "2026-10-01"
+    },
+    "CVE-2026-12087": {
+      "package": "perl",
+      "reason": "Debian trixie package vulnerability currently marked not fixed by Scout",
+      "review_by": "2026-10-01"
+    },
+    "CVE-2026-48959": {
+      "package": "perl",
+      "reason": "Debian trixie package vulnerability currently marked not fixed by Scout",
+      "review_by": "2026-10-01"
+    },
+    "CVE-2026-48962": {
+      "package": "perl",
+      "reason": "Debian trixie package vulnerability currently marked not fixed by Scout",
+      "review_by": "2026-10-01"
+    }
+  }
+}
