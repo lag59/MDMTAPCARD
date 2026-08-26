@@ -23,6 +23,10 @@ class Profile(Base):
     biography: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     theme_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    custom_theme: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON for uploaded custom templates
+    booking_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # scheduling link (Calendly/Cal.com)
+    payment_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # payment link (Stripe/PayPal)
+    payment_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
     language: Mapped[str] = mapped_column(String(10), default="en")  # "en" | "es"
     whatsapp_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

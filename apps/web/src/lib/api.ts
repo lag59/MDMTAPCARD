@@ -58,10 +58,38 @@ export async function apiDelete(path: string): Promise<void> {
 
 export async function fetchProfile(slug: string) {
   const res = await fetch(`${BASE_URL}/api/v1/profiles/${slug}`, {
-    next: { revalidate: 60 },
+    cache: "no-store",
   });
   if (!res.ok) return null;
   return res.json();
+}
+
+export async function uploadLogo(file: File): Promise<string> {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) throw new Error("No access token found. Please sign in again.");
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${BASE_URL}/api/v1/profiles/upload-logo`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  if (!res.ok) {
+    let detail = `Upload failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback
+    }
+    throw new Error(detail);
+  }
+
+  const data = (await res.json()) as { url: string };
+  return data.url;
 }
 
 export async function trackEvent(payload: {

@@ -32,6 +32,9 @@ services:
       PROFILE_BASE_URL: http://localhost:3000
     ports:
       - "8000:8000"
+    volumes:
+      - api_uploads:/app/uploads
 
 volumes:
   postgres_data:
+  api_uploads:

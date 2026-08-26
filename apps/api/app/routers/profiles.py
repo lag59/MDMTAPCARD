@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, status
 from pydantic import BaseModel, EmailStr
 from slugify import slugify
 from sqlalchemy import select
@@ -12,8 +12,12 @@ from app.core.deps import CurrentUser, get_db, require_company_context, enforce_
 from app.models.profile import Profile, SocialLink
 from app.models.user import UserRole
 from app.utils.qr import generate_qr_bytes
+from app.utils.storage import save_public_asset
 
 router = APIRouter()
+
+_ALLOWED_LOGO_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg", "image/gif": "gif"}
+_MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 class SocialLinkIn(BaseModel):
@@ -33,6 +37,10 @@ class ProfileCreate(BaseModel):
     whatsapp_number: str | None = None
     language: str = "en"
     theme_id: str | None = None
+    custom_theme: str | None = None
+    booking_url: str | None = None
+    payment_url: str | None = None
+    payment_label: str | None = None
     social_links: List[SocialLinkIn] = []
     company_id: uuid.UUID | None = None
 
@@ -93,6 +101,31 @@ async def create_profile(
     return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug)}
 
 
+class LogoUploadOut(BaseModel):
+    url: str
+
+
+@router.post("/upload-logo", response_model=LogoUploadOut)
+async def upload_logo(
+    current_user: CurrentUser,
+    file: Annotated[UploadFile, File(...)],
+):
+    if current_user.role not in {UserRole.super_admin, UserRole.business_owner, UserRole.employee}:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    ext = _ALLOWED_LOGO_TYPES.get(file.content_type or "")
+    if not ext:
+        raise HTTPException(status_code=400, detail="Unsupported image type. Use PNG, JPEG, WebP, SVG, or GIF.")
+
+    data = await file.read()
+    if len(data) > _MAX_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large (max 5 MB).")
+
+    key = f"logos/{uuid.uuid4().hex}.{ext}"
+    url = save_public_asset(key, data, content_type=file.content_type or "application/octet-stream")
+    return {"url": url}
+
+
 @router.get("/qr/{slug}")
 async def get_profile_qr(slug: str, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
@@ -130,6 +163,10 @@ class ProfileUpdate(BaseModel):
     whatsapp_number: str | None = None
     language: str | None = None
     theme_id: str | None = None
+    custom_theme: str | None = None
+    booking_url: str | None = None
+    payment_url: str | None = None
+    payment_label: str | None = None
     is_active: bool | None = None
     social_links: List[SocialLinkIn] | None = None
 

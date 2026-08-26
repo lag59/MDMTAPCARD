@@ -1,3 +1,4 @@
+import os
 import boto3
 from botocore.config import Config
 from app.config import settings
@@ -22,3 +23,16 @@ def upload_file(key: str, data: bytes, content_type: str = "application/octet-st
         ACL="public-read",
     )
     return f"{settings.STORAGE_PUBLIC_URL}/{key}"
+
+
+def save_public_asset(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+    """Store an asset in S3/R2 when configured, else on local disk. Returns a public URL."""
+    if settings.STORAGE_BUCKET:
+        return upload_file(key, data, content_type)
+
+    dest_dir = os.path.join(settings.UPLOAD_DIR, os.path.dirname(key))
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(os.path.join(settings.UPLOAD_DIR, key), "wb") as f:
+        f.write(data)
+    return f"{settings.API_PUBLIC_URL.rstrip('/')}/{settings.UPLOAD_DIR}/{key}"
+

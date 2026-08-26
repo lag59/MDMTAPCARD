@@ -1,5 +1,8 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -33,6 +36,11 @@ app.include_router(nfc.router, prefix="/api/v1/nfc", tags=["nfc"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(leads.router, prefix="/api/v1/leads", tags=["leads"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+
+# Serve locally-uploaded assets when no external object storage is configured.
+if not settings.STORAGE_BUCKET:
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount(f"/{settings.UPLOAD_DIR}", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
 @app.get("/health")

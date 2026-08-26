@@ -24,7 +24,8 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl \
     && rm -rf /wheels
 
 COPY . /app
-RUN chown -R app:app /app
+RUN mkdir -p /app/uploads \
+    && chown -R app:app /app
 
 USER app
 

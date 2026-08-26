@@ -14,6 +14,10 @@ export interface Profile {
   whatsapp_number?: string;
   language: "en" | "es";
   theme_id?: string;
+  custom_theme?: string;
+  booking_url?: string;
+  payment_url?: string;
+  payment_label?: string;
   social_links: SocialLink[];
   profile_url: string;
   is_active: boolean;

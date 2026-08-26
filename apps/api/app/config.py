@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     STORAGE_SECRET_KEY: str = ""
     STORAGE_PUBLIC_URL: str = ""
 
+    # Local upload fallback (used when no S3/R2 bucket is configured)
+    UPLOAD_DIR: str = "uploads"
+    API_PUBLIC_URL: str = "http://localhost:8000"
+
     # Profile base URL written to NFC tags
     PROFILE_BASE_URL: str = "https://tap.mdmcreation.com"
 
