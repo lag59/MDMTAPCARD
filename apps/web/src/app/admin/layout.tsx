@@ -30,6 +30,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ["Dashboard", "/admin"],
           ["Clients", "/admin/clients"],
           ["Digital Cards", "/admin/cards"],
+          ["Templates", "/admin/templates"],
           ["NFC Inventory", "/admin/nfc"],
           ["Orders", "/admin/orders"],
           ["Analytics", "/admin/analytics"],

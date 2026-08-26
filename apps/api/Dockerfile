@@ -2,7 +2,6 @@
 FROM python:3.13-slim AS builder
 
 RUN apt-get update \
-    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,10 +15,8 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+RUN addgroup --system app \
+    && adduser --system --ingroup app app
 
 WORKDIR /app
 COPY --from=builder /wheels /wheels
@@ -27,6 +24,10 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels /wheels/*.whl \
     && rm -rf /wheels
 
 COPY . /app
+RUN mkdir -p /app/uploads \
+    && chown -R app:app /app
+
+USER app
 
 EXPOSE 8000
 

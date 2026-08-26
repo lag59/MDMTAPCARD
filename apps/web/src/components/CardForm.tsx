@@ -1,17 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import TemplatePreview from "./TemplatePreview";
+import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
+import { uploadLogo } from "@/lib/api";
 
 const PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "youtube"] as const;
-
-const THEME_OPTIONS = [
-  { id: "dark",     label: "Dark",     color: "bg-slate-700" },
-  { id: "ocean",    label: "Ocean",    color: "bg-blue-500" },
-  { id: "sunset",   label: "Sunset",   color: "bg-orange-500" },
-  { id: "forest",   label: "Forest",   color: "bg-emerald-600" },
-  { id: "midnight", label: "Midnight", color: "bg-violet-700" },
-  { id: "light",    label: "Light",    color: "bg-slate-200 border border-slate-300" },
-];
 
 export interface CardFormValues {
   display_name: string;
@@ -25,6 +19,10 @@ export interface CardFormValues {
   whatsapp_number: string;
   language: "en" | "es";
   theme_id: string;
+  custom_theme: string;
+  booking_url: string;
+  payment_url: string;
+  payment_label: string;
   is_active: boolean;
   social_links: { platform: string; url: string }[];
 }
@@ -48,12 +46,18 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
     whatsapp_number: initial?.whatsapp_number ?? "",
     language: initial?.language ?? "en",
     theme_id: initial?.theme_id ?? "dark",
+    custom_theme: initial?.custom_theme ?? "",
+    booking_url: initial?.booking_url ?? "",
+    payment_url: initial?.payment_url ?? "",
+    payment_label: initial?.payment_label ?? "",
     is_active: initial?.is_active ?? true,
     social_links: initial?.social_links ?? [],
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const customFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setValues({
@@ -68,6 +72,10 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
       whatsapp_number: initial?.whatsapp_number ?? "",
       language: initial?.language ?? "en",
       theme_id: initial?.theme_id ?? "dark",
+      custom_theme: initial?.custom_theme ?? "",
+      booking_url: initial?.booking_url ?? "",
+      payment_url: initial?.payment_url ?? "",
+      payment_label: initial?.payment_label ?? "",
       is_active: initial?.is_active ?? true,
       social_links: initial?.social_links ?? [],
     });
@@ -97,13 +105,32 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
       setError("Please choose an image file for the logo.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setValues((v) => ({ ...v, photo_url: reader.result }));
+    setUploadingLogo(true);
+    setError(null);
+    uploadLogo(file)
+      .then((url) => setValues((v) => ({ ...v, photo_url: url })))
+      .catch((err) => setError(err instanceof Error ? err.message : "Logo upload failed."))
+      .finally(() => {
+        setUploadingLogo(false);
+        e.target.value = "";
+      });
+  };
+
+  const handleCustomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!isValidCustomTheme(parsed)) {
+        throw new Error("Invalid template file (needs a layout and a full color palette).");
       }
-    };
-    reader.readAsDataURL(file);
+      setValues((v) => ({ ...v, theme_id: "custom", custom_theme: JSON.stringify(parsed) }));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid template file.");
+    } finally {
+      e.currentTarget.value = "";
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,9 +184,11 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
           <label className={label}>Logo / Profile Image (optional)</label>
           <div className="flex flex-col md:flex-row gap-3">
             <input className={input} placeholder="Paste image URL" value={values.photo_url} onChange={set("photo_url")} />
-            <input type="file" accept="image/*" onChange={handleLogoFile} className="block text-sm text-slate-600" />
+            <input type="file" accept="image/*" onChange={handleLogoFile} disabled={uploadingLogo} className="block text-sm text-slate-600" />
           </div>
-          <p className="mt-2 text-xs text-slate-500">If you do not upload a logo/image, the card will show initials automatically.</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {uploadingLogo ? "Uploading…" : "Upload a logo/image or paste a URL. If none is set, the card shows initials automatically."}
+          </p>
           {values.photo_url ? (
             <div className="mt-3 flex items-center gap-3">
               <img src={values.photo_url} alt="Logo preview" className="w-20 h-20 rounded-lg object-cover border border-slate-200" />
@@ -218,19 +247,116 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
         </div>
 
         <div className="md:col-span-2">
-          <label className={label}>Card Theme</label>
-          <div className="flex gap-4 flex-wrap mt-1">
-            {THEME_OPTIONS.map((t) => (
+          <div className="flex items-center justify-between mb-2">
+            <label className={label}>Card Template</label>
+            <div className="flex items-center gap-3">
               <button
-                key={t.id}
                 type="button"
-                onClick={() => setValues((v) => ({ ...v, theme_id: t.id }))}
-                className="flex flex-col items-center gap-1.5"
+                onClick={() => customFileRef.current?.click()}
+                className="text-xs font-medium text-blue-600 hover:underline"
               >
-                <div className={`w-10 h-10 rounded-full ${t.color} transition ${values.theme_id === t.id ? "ring-2 ring-offset-2 ring-blue-500 scale-110" : "opacity-70 hover:opacity-100"}`} />
-                <span className={`text-xs ${values.theme_id === t.id ? "font-semibold text-slate-800" : "text-slate-500"}`}>{t.label}</span>
+                Upload custom…
               </button>
+              <a href="/admin/templates" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline">
+                Browse gallery ↗
+              </a>
+            </div>
+          </div>
+          <input
+            ref={customFileRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleCustomUpload}
+            className="hidden"
+          />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {values.theme_id === "custom" && values.custom_theme && (
+              <div className="rounded-lg border border-blue-500 ring-2 ring-blue-200 p-1.5 text-left">
+                <TemplatePreview
+                  overrides={{
+                    theme_id: "custom",
+                    custom_theme: values.custom_theme,
+                    display_name: values.display_name || "Alex Rivera",
+                    title: values.title,
+                    photo_url: values.photo_url,
+                  }}
+                  width={120}
+                  height={180}
+                />
+                <div className="mt-1 text-[11px] font-semibold text-blue-700">Custom (uploaded)</div>
+              </div>
+            )}
+            {TEMPLATES.map((t) => (
+              <div
+                key={t.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setValues((v) => ({ ...v, theme_id: t.id }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setValues((v) => ({ ...v, theme_id: t.id }));
+                  }
+                }}
+                className={`cursor-pointer rounded-lg border p-1.5 text-left transition ${
+                  values.theme_id === t.id
+                    ? "border-blue-500 ring-2 ring-blue-200"
+                    : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <TemplatePreview
+                  overrides={{
+                    theme_id: t.id,
+                    display_name: values.display_name || "Alex Rivera",
+                    title: values.title,
+                    photo_url: values.photo_url,
+                  }}
+                  width={120}
+                  height={180}
+                />
+                <div className="mt-1 flex items-center gap-1">
+                  <span className={`h-2.5 w-2.5 rounded-full ${t.swatch}`} />
+                  <span className="text-[11px] font-medium text-slate-700 truncate">{t.name}</span>
+                </div>
+              </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 p-4">
+        <p className="text-sm font-medium text-slate-700 mb-1">Scheduling &amp; Payments</p>
+        <p className="text-xs text-slate-500 mb-3">
+          Add a booking link (Calendly, Cal.com) and/or a payment link (Stripe Payment Link, PayPal.me).
+          Buttons appear on the card only when a link is set.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className={label}>Booking / Scheduling link</label>
+            <input
+              className={input}
+              placeholder="https://calendly.com/your-name"
+              value={values.booking_url}
+              onChange={set("booking_url")}
+            />
+          </div>
+          <div>
+            <label className={label}>Payment link</label>
+            <input
+              className={input}
+              placeholder="https://buy.stripe.com/… or paypal.me/…"
+              value={values.payment_url}
+              onChange={set("payment_url")}
+            />
+          </div>
+          <div>
+            <label className={label}>Payment button label (optional)</label>
+            <input
+              className={input}
+              placeholder="Pay Now / Book Deposit"
+              value={values.payment_label}
+              onChange={set("payment_label")}
+            />
           </div>
         </div>
       </div>

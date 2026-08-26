@@ -34,6 +34,20 @@ export default function NewCardPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const template = new URLSearchParams(window.location.search).get("template");
+    if (!template) return;
+    if (template === "custom") {
+      const raw = window.sessionStorage.getItem("pending_custom_theme");
+      if (raw) {
+        setImportInitial((prev) => ({ ...prev, theme_id: "custom", custom_theme: raw }));
+        window.sessionStorage.removeItem("pending_custom_theme");
+      }
+    } else {
+      setImportInitial((prev) => ({ ...prev, theme_id: template }));
+    }
+  }, []);
+
   const handleSubmit = async (values: CardFormValues) => {
     const created = await apiPost<Profile>("/api/v1/profiles/", {
       ...values,
@@ -45,6 +59,10 @@ export default function NewCardPage() {
       address: values.address || null,
       biography: values.biography || null,
       whatsapp_number: values.whatsapp_number || null,
+      custom_theme: values.custom_theme || null,
+      booking_url: values.booking_url || null,
+      payment_url: values.payment_url || null,
+      payment_label: values.payment_label || null,
       company_id: selectedCompanyId || null,
     });
     router.push(`/admin/cards/${created.slug}`);
@@ -68,6 +86,10 @@ export default function NewCardPage() {
         whatsapp_number: source.whatsapp_number ?? "",
         language: source.language,
         theme_id: source.theme_id ?? "dark",
+        custom_theme: source.custom_theme ?? "",
+        booking_url: source.booking_url ?? "",
+        payment_url: source.payment_url ?? "",
+        payment_label: source.payment_label ?? "",
         is_active: source.is_active,
         social_links: source.social_links.map((l) => ({ platform: l.platform, url: l.url })),
       });
@@ -100,6 +122,10 @@ export default function NewCardPage() {
         whatsapp_number: source.whatsapp_number ?? "",
         language: source.language === "es" ? "es" : "en",
         theme_id: source.theme_id ?? "dark",
+        custom_theme: (source as { custom_theme?: string }).custom_theme ?? "",
+        booking_url: (source as { booking_url?: string }).booking_url ?? "",
+        payment_url: (source as { payment_url?: string }).payment_url ?? "",
+        payment_label: (source as { payment_label?: string }).payment_label ?? "",
         is_active: source.is_active ?? true,
         social_links: Array.isArray(source.social_links)
           ? source.social_links

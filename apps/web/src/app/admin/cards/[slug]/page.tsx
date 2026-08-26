@@ -35,6 +35,10 @@ export default function EditCardPage() {
       address: values.address || null,
       biography: values.biography || null,
       whatsapp_number: values.whatsapp_number || null,
+      custom_theme: values.custom_theme || null,
+      booking_url: values.booking_url || null,
+      payment_url: values.payment_url || null,
+      payment_label: values.payment_label || null,
     });
     setProfile(updated);
   };
@@ -76,6 +80,10 @@ export default function EditCardPage() {
         whatsapp_number: profile.whatsapp_number ?? "",
         language: profile.language,
         theme_id: profile.theme_id ?? "dark",
+        custom_theme: profile.custom_theme ?? "",
+        booking_url: profile.booking_url ?? "",
+        payment_url: profile.payment_url ?? "",
+        payment_label: profile.payment_label ?? "",
         is_active: profile.is_active,
         social_links: profile.social_links.map((l) => ({ platform: l.platform, url: l.url })),
       },
@@ -122,6 +130,10 @@ export default function EditCardPage() {
     whatsapp_number: profile.whatsapp_number ?? "",
     language: profile.language,
     theme_id: profile.theme_id ?? "dark",
+    custom_theme: profile.custom_theme ?? "",
+    booking_url: profile.booking_url ?? "",
+    payment_url: profile.payment_url ?? "",
+    payment_label: profile.payment_label ?? "",
     is_active: profile.is_active,
     social_links: profile.social_links.map((l) => ({ platform: l.platform, url: l.url })),
   };
@@ -157,6 +169,9 @@ export default function EditCardPage() {
           >
             View card ↗
           </a>
+          <Link href={`/admin/cards/${slug}/print`} className="text-sm text-slate-600 hover:text-slate-900">
+            Print card
+          </Link>
           <button
             onClick={handleDelete}
             disabled={deleting}

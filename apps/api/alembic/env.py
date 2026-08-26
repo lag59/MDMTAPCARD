@@ -14,8 +14,11 @@ config = context.config
 # Prefer runtime DATABASE_URL (e.g., docker compose environment) over alembic.ini default.
 database_url = os.getenv("DATABASE_URL")
 if database_url:
-    if "+asyncpg" in database_url:
-        database_url = database_url.replace("+asyncpg", "+psycopg")
+    # Migrations run synchronously via psycopg (v3); coerce any provider URL to it.
+    for prefix in ("postgresql+asyncpg://", "postgresql://", "postgres://"):
+        if database_url.startswith(prefix):
+            database_url = "postgresql+psycopg://" + database_url[len(prefix):]
+            break
     config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:

@@ -132,6 +132,12 @@ docker compose down
 - API runtime in Docker uses `postgresql+asyncpg://...`.
 - Alembic automatically uses a sync psycopg URL internally for migrations.
 
+### Container vulnerability policy
+
+- Docker Scout recommendations + CI gate documentation: [security/README.md](security/README.md)
+- Unfixed OS CVE exceptions list: [security/scout_unfixed_os_exceptions.json](security/scout_unfixed_os_exceptions.json)
+- API image gate workflow: [.github/workflows/api-scout-gate.yml](.github/workflows/api-scout-gate.yml)
+
 ### One-command PowerShell helper
 
 From the repository root:
