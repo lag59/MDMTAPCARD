@@ -15,12 +15,12 @@ def _client():
 
 
 def upload_file(key: str, data: bytes, content_type: str = "application/octet-stream") -> str:
+    # R2 does not support per-object ACLs; public access is configured on the bucket.
     _client().put_object(
         Bucket=settings.STORAGE_BUCKET,
         Key=key,
         Body=data,
         ContentType=content_type,
-        ACL="public-read",
     )
     return f"{settings.STORAGE_PUBLIC_URL}/{key}"
 
