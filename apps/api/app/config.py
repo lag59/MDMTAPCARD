@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 from pydantic import field_validator
-from typing import List
+from typing import Annotated, List
 
 
 class Settings(BaseSettings):
@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/mdmtapcard"
 
-    # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "https://tap.mdmcreation.com"]
+    # CORS — accepts a comma-separated list or a JSON array.
+    ALLOWED_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:3000", "https://tap.mdmcreation.com"]
 
     # Storage (Cloudflare R2 or AWS S3)
     STORAGE_BUCKET: str = ""
@@ -29,6 +29,20 @@ class Settings(BaseSettings):
 
     # Profile base URL written to NFC tags
     PROFILE_BASE_URL: str = "https://tap.mdmcreation.com"
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def _parse_allowed_origins(cls, v):
+        if isinstance(v, str):
+            s = v.strip()
+            if s.startswith("["):
+                import json
+                try:
+                    return json.loads(s)
+                except Exception:
+                    pass
+            return [o.strip() for o in s.split(",") if o.strip()]
+        return v
 
     @field_validator("DATABASE_URL")
     @classmethod
