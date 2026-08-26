@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 
 
@@ -28,6 +29,18 @@ class Settings(BaseSettings):
 
     # Profile base URL written to NFC tags
     PROFILE_BASE_URL: str = "https://tap.mdmcreation.com"
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalize_database_url(cls, v: str) -> str:
+        # Accept any provider URL (Neon, Fly, etc.) and coerce to the async driver.
+        if v.startswith("postgres://"):
+            v = "postgresql+asyncpg://" + v[len("postgres://"):]
+        elif v.startswith("postgresql://"):
+            v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        if "+asyncpg" in v:
+            v = v.replace("sslmode=", "ssl=")
+        return v
 
     class Config:
         env_file = ".env"
