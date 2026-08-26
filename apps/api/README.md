@@ -12,13 +12,13 @@ These tests run against a live API instance (default: `http://localhost:8000`).
 docker compose up -d --build db api
 ```
 
-2. Ensure demo users exist (for auth-based tests):
+1. Ensure demo users exist (for auth-based tests):
 
 ```powershell
 docker compose exec -T api python seed_demo.py
 ```
 
-3. Install test runner dependencies in your interpreter (if needed):
+1. Install test runner dependencies in your interpreter (if needed):
 
 ```powershell
 python -m pip install pytest httpx

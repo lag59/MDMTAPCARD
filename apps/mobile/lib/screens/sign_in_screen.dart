@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import '../services/api_client.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -20,8 +21,19 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       await ApiClient.login(_email.text.trim(), _password.text);
       if (mounted) context.go('/dashboard');
-    } catch (_) {
-      setState(() { _error = 'Invalid email or password.'; });
+    } catch (e) {
+      String message = 'Sign in failed. Please try again.';
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          message = 'Invalid email or password.';
+        } else if (e.response?.statusCode != null) {
+          final status = e.response?.statusCode;
+          message = 'Sign in failed (HTTP $status).';
+        } else {
+          message = 'Cannot reach API at ${ApiClient.baseUrl}.';
+        }
+      }
+      setState(() { _error = message; });
     } finally {
       if (mounted) setState(() => _loading = false);
     }

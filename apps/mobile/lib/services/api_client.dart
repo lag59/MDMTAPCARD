@@ -7,6 +7,8 @@ class ApiClient {
   static const _storage = FlutterSecureStorage();
   static late final Dio _dio;
 
+  static String get baseUrl => _baseUrl;
+
   static void init() {
     _dio = Dio(BaseOptions(baseUrl: _baseUrl))
       ..interceptors.add(InterceptorsWrapper(
