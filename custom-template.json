@@ -1,0 +1,14 @@
+{
+  "name": "My Brand Card",
+  "layout": "spotlight",
+  "palette": {
+    "bg": "bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-700",
+    "text": "text-white",
+    "sub": "text-cyan-50",
+    "glass": "bg-white/15 border border-white/25",
+    "save": "bg-white text-indigo-900 hover:bg-indigo-50",
+    "inquiry": "border border-white/40 text-white hover:bg-white/15",
+    "accent": "bg-indigo-700"
+  }
+}
+
