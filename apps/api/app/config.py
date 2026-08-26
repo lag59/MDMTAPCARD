@@ -33,14 +33,23 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def _normalize_database_url(cls, v: str) -> str:
-        # Accept any provider URL (Neon, Fly, etc.) and coerce to the async driver.
+        # Accept any provider URL (Neon, Fly, etc.) and coerce to the async driver,
+        # stripping libpq-only query params that asyncpg does not accept.
+        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
         if v.startswith("postgres://"):
-            v = "postgresql+asyncpg://" + v[len("postgres://"):]
-        elif v.startswith("postgresql://"):
+            v = "postgresql://" + v[len("postgres://"):]
+        if v.startswith("postgresql://"):
             v = "postgresql+asyncpg://" + v[len("postgresql://"):]
-        if "+asyncpg" in v:
-            v = v.replace("sslmode=", "ssl=")
-        return v
+        if "+asyncpg" not in v:
+            return v
+
+        parts = urlsplit(v)
+        query = dict(parse_qsl(parts.query))
+        query.pop("channel_binding", None)
+        if "sslmode" in query:
+            query["ssl"] = query.pop("sslmode")
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
     class Config:
         env_file = ".env"
