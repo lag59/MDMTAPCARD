@@ -11,85 +11,281 @@ class CreateCardScreen extends StatefulWidget {
 
 class _CreateCardScreenState extends State<CreateCardScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _name = TextEditingController();
   final _title = TextEditingController();
   final _company = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _website = TextEditingController();
+  final _whatsapp = TextEditingController();
+  final _address = TextEditingController();
   final _about = TextEditingController();
+
   bool _isEs = false;
+  bool _isActive = true;
   bool _loading = false;
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _loading = true);
+
     try {
       final profile = await ApiClient.createProfile({
         'display_name': _name.text.trim(),
         'title': _title.text.trim().isEmpty ? null : _title.text.trim(),
+        'company': _company.text.trim().isEmpty ? null : _company.text.trim(),
         'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
         'email': _email.text.trim().isEmpty ? null : _email.text.trim(),
         'website': _website.text.trim().isEmpty ? null : _website.text.trim(),
+        'whatsapp': _whatsapp.text.trim().isEmpty
+            ? null
+            : _whatsapp.text.trim(),
+        'address': _address.text.trim().isEmpty ? null : _address.text.trim(),
         'biography': _about.text.trim().isEmpty ? null : _about.text.trim(),
         'language': _isEs ? 'es' : 'en',
+        'is_active': _isActive,
         'social_links': [],
       });
+
       if (!mounted) return;
-      context.push('/cards/${profile['id']}/preview');
+
+      final profileId = profile['id'];
+
+      if (profileId == null) {
+        throw Exception('Profile was created but no profile ID was returned.');
+      }
+
+      context.push('/cards/$profileId/preview');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error creating card: $e'),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _title.dispose();
+    _company.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _website.dispose();
+    _whatsapp.dispose();
+    _address.dispose();
+    _about.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Digital Card')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            TextFormField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: 'Name', border: OutlineInputBorder()),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(controller: _title, decoration: const InputDecoration(labelText: 'Job Title', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextFormField(controller: _company, decoration: const InputDecoration(labelText: 'Company', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextFormField(controller: _phone, decoration: const InputDecoration(labelText: 'Phone', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextFormField(controller: _email, decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextFormField(controller: _website, decoration: const InputDecoration(labelText: 'Website', border: OutlineInputBorder())),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _about,
-              maxLines: 4,
-              decoration: const InputDecoration(labelText: 'About', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              value: _isEs,
-              onChanged: (v) => setState(() => _isEs = v),
-              title: const Text('Spanish profile'),
-              subtitle: const Text('Enable for default Spanish labels'),
-            ),
-            const SizedBox(height: 20),
-            FilledButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Create Card Profile'),
-            ),
-          ],
+      appBar: AppBar(
+        title: const Text('Create Digital Card'),
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextFormField(
+                controller: _name,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  hintText: 'Enter full name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Name is required';
+                  }
+
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _title,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Job Title / Position',
+                  hintText: 'Example: CEO',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _company,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Company',
+                  hintText: 'Enter company name',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Phone',
+                  hintText: 'Example: 919-555-1234',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'name@company.com',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return null;
+                  }
+
+                  final email = value.trim();
+
+                  final emailPattern = RegExp(
+                    r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                  );
+
+                  if (!emailPattern.hasMatch(email)) {
+                    return 'Enter a valid email address';
+                  }
+
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _website,
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Website',
+                  hintText: 'https://example.com',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.language),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _whatsapp,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'WhatsApp Number',
+                  hintText: 'Example: 19195551234',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.chat_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _address,
+                keyboardType: TextInputType.streetAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: 'Address',
+                  hintText: 'Business or mailing address',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              TextFormField(
+                controller: _about,
+                maxLines: 5,
+                minLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'About / Biography',
+                  hintText: 'Tell visitors about this person or business',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Card(
+                child: SwitchListTile(
+                  value: _isEs,
+                  onChanged: (value) {
+                    setState(() => _isEs = value);
+                  },
+                  title: const Text('Spanish Profile'),
+                  subtitle: const Text(
+                    'Enable Spanish as the default card language',
+                  ),
+                  secondary: const Icon(Icons.translate),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              Card(
+                child: SwitchListTile(
+                  value: _isActive,
+                  onChanged: (value) {
+                    setState(() => _isActive = value);
+                  },
+                  title: const Text('Active'),
+                  subtitle: const Text(
+                    'Allow this digital card to be publicly visible',
+                  ),
+                  secondary: const Icon(Icons.visibility_outlined),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              SizedBox(
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: _loading ? null : _submit,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.add_card),
+                  label: Text(
+                    _loading ? 'Creating Card...' : 'Create Card Profile',
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
