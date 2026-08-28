@@ -162,6 +162,7 @@ async def schema_repair(
     await db.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(40) NOT NULL DEFAULT 'not_required'"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS public_url TEXT NULL"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS hardware_type VARCHAR(20) NOT NULL DEFAULT 'card'"))
+    await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS card_number VARCHAR(40) NULL"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL"))
     await db.execute(
