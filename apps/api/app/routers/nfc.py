@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from nanoid import generate
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -527,22 +527,52 @@ async def resolve_public_tag(
     public_token: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    tag = (
+    tag_row = (
         await db.execute(
-            select(NfcTag).where(NfcTag.tag_token == public_token).limit(1)
+            text(
+                """
+                SELECT id, profile_id, status
+                FROM nfc_tags
+                WHERE tag_token = :token
+                LIMIT 1
+                """
+            ),
+            {"token": public_token},
         )
-    ).scalar_one_or_none()
-    if not tag:
+    ).mappings().first()
+
+    if not tag_row:
         raise HTTPException(status_code=404, detail="Tag not found")
 
-    if tag.status != NfcTagStatus.verified:
+    status_value = str(tag_row.get("status") or "")
+    if status_value != NfcTagStatus.verified.value:
         return {
             "active": False,
             "message": "This NFC card or button is no longer active.",
         }
 
-    profile = await db.get(Profile, tag.profile_id)
-    if not profile or not profile.is_active:
+    profile_row = (
+        await db.execute(
+            text(
+                """
+                SELECT slug, is_active
+                FROM profiles
+                WHERE id = :profile_id
+                LIMIT 1
+                """
+            ),
+            {"profile_id": tag_row.get("profile_id")},
+        )
+    ).mappings().first()
+
+    if not profile_row or not bool(profile_row.get("is_active")):
+        return {
+            "active": False,
+            "message": "This NFC card or button is no longer active.",
+        }
+
+    profile_slug = str(profile_row.get("slug") or "").strip()
+    if not profile_slug:
         return {
             "active": False,
             "message": "This NFC card or button is no longer active.",
@@ -550,6 +580,6 @@ async def resolve_public_tag(
 
     return {
         "active": True,
-        "slug": profile.slug,
-        "redirect_url": f"{settings.PROFILE_BASE_URL}/c/{profile.slug}",
+        "slug": profile_slug,
+        "redirect_url": f"{settings.PROFILE_BASE_URL}/c/{profile_slug}",
     }
