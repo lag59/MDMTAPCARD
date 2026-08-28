@@ -8,7 +8,9 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.database import engine
 from app.routers import auth, profiles, nfc, analytics, leads, admin
+from sqlalchemy import text
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -43,6 +45,24 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 if not settings.STORAGE_BUCKET:
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     app.mount(f"/{settings.UPLOAD_DIR}", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+
+
+@app.on_event("startup")
+async def _schema_guard_startup() -> None:
+    """Best-effort schema guard for production drift.
+
+    Ensures critical columns/enums exist before request handlers use ORM models
+    that reference newer fields.
+    """
+    async with engine.begin() as conn:
+        await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS card_type VARCHAR(30) NOT NULL DEFAULT 'digital_only'"))
+        await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(40) NOT NULL DEFAULT 'not_required'"))
+        await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS public_url TEXT NULL"))
+        await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS hardware_type VARCHAR(20) NOT NULL DEFAULT 'card'"))
+        await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL"))
+        await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL"))
+
+        # Enum evolution is still handled by Alembic migrations.
 
 
 @app.get("/health")
