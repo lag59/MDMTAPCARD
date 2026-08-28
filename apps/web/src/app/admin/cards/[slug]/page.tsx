@@ -8,6 +8,8 @@ import { apiGet, apiPatch, apiDelete } from "@/lib/api";
 import type { Profile } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
+type Me = { role: string };
+
 export default function EditCardPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -16,12 +18,16 @@ export default function EditCardPage() {
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exported, setExported] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     apiGet<Profile>(`/api/v1/profiles/${slug}/edit`)
       .then(setProfile)
       .catch((e) => setLoadError(e instanceof Error ? e.message : "Could not load card."));
+    apiGet<Me>("/api/v1/admin/me")
+      .then((me) => setRole(me.role))
+      .catch(() => setRole(null));
   }, [slug]);
 
   const handleSubmit = async (values: CardFormValues) => {
@@ -138,6 +144,8 @@ export default function EditCardPage() {
     social_links: profile.social_links.map((l) => ({ platform: l.platform, url: l.url })),
   };
 
+  const isSuperAdmin = role === "super_admin";
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -172,13 +180,15 @@ export default function EditCardPage() {
           <Link href={`/admin/cards/${slug}/print`} className="text-sm text-slate-600 hover:text-slate-900">
             Print card
           </Link>
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50"
-          >
-            {deleting ? "Deleting…" : "Delete"}
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          )}
         </div>
       </div>
 

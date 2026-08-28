@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiGet } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch } from "@/lib/api";
 
 type AdminProfile = {
   id: string;
@@ -18,19 +18,30 @@ type AdminProfile = {
   created_at: string | null;
 };
 
+type Me = {
+  role: string;
+};
+
 export default function CardsPage() {
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
+  const [role, setRole] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     const load = async () => {
       try {
-        const data = await apiGet<AdminProfile[]>("/api/v1/admin/profiles");
+        const [data, me] = await Promise.all([
+          apiGet<AdminProfile[]>("/api/v1/admin/profiles"),
+          apiGet<Me>("/api/v1/admin/me"),
+        ]);
         if (mounted) {
           setProfiles(data);
+          setRole(me.role);
           setError(null);
         }
       } catch (e) {
@@ -71,6 +82,37 @@ export default function CardsPage() {
     await navigator.clipboard.writeText(url);
     setCopiedId(id);
     window.setTimeout(() => setCopiedId((curr) => (curr === id ? null : curr)), 1500);
+  };
+
+  const isSuperAdmin = role === "super_admin";
+
+  const toggleActive = async (profile: AdminProfile) => {
+    setUpdatingId(profile.id);
+    setError(null);
+    try {
+      const updated = await apiPatch<AdminProfile>(`/api/v1/profiles/${profile.slug}`, {
+        is_active: !profile.is_active,
+      });
+      setProfiles((prev) => prev.map((p) => (p.id === profile.id ? { ...p, is_active: updated.is_active } : p)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update card status.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const deleteCard = async (profile: AdminProfile) => {
+    if (!confirm(`Delete card "${profile.display_name}"? This cannot be undone.`)) return;
+    setDeletingId(profile.id);
+    setError(null);
+    try {
+      await apiDelete(`/api/v1/profiles/${profile.slug}`);
+      setProfiles((prev) => prev.filter((p) => p.id !== profile.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete card.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -151,6 +193,31 @@ export default function CardsPage() {
                       >
                         {copiedId === profile.id ? "Copied" : "Copy Link"}
                       </button>
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => toggleActive(profile)}
+                          disabled={updatingId === profile.id || deletingId === profile.id}
+                          className="text-xs text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                          title={profile.is_active ? "Deactivate card" : "Activate card"}
+                        >
+                          {updatingId === profile.id
+                            ? "Updating…"
+                            : profile.is_active
+                            ? "Deactivate"
+                            : "Activate"}
+                        </button>
+                      )}
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => deleteCard(profile)}
+                          disabled={deletingId === profile.id || updatingId === profile.id}
+                          className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                        >
+                          {deletingId === profile.id ? "Deleting…" : "Delete"}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

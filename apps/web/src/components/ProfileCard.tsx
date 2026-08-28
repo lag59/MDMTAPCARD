@@ -12,9 +12,16 @@ const i18n = {
   en: {
     saveContact: "Save Contact",
     saveFallback: "Having trouble saving? Download .VCF",
+    addToWallet: "Add to Wallet",
+    contactInfo: "Contact Info",
+    phone: "Phone",
+    email: "Email",
+    website: "Website",
+    address: "Address",
     inquiry: "Send Inquiry",
     about: "About",
     connect: "Connect",
+    socialProfiles: "Social Profiles",
     scan: "Scan to share this card",
     book: "Book an Appointment",
     pay: "Pay Now",
@@ -22,9 +29,16 @@ const i18n = {
   es: {
     saveContact: "Guardar Contacto",
     saveFallback: "¿Problemas para guardar? Descarga .VCF",
+    addToWallet: "Agregar a Wallet",
+    contactInfo: "Información de Contacto",
+    phone: "Teléfono",
+    email: "Correo",
+    website: "Sitio Web",
+    address: "Dirección",
     inquiry: "Enviar Consulta",
     about: "Acerca de",
     connect: "Conectar",
+    socialProfiles: "Redes Sociales",
     scan: "Escanear para compartir",
     book: "Reservar una Cita",
     pay: "Pagar Ahora",
@@ -78,6 +92,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
 
   const vcardUrl = `/api/vcard/${profile.slug}`;
   const vcardDownloadUrl = `/api/vcard/${profile.slug}?download=1`;
+  const walletUrl = `/api/wallet/${profile.slug}`;
   const qrUrl = `${apiBaseUrl}/api/v1/profiles/qr/${profile.slug}`;
   const initials = profile.display_name
     .split(" ")
@@ -85,8 +100,10 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+  const hasContactDetails = !!(profile.phone || profile.email || profile.website || profile.address);
+  const hasSocialDetails = (profile.social_links?.length ?? 0) > 0;
 
-  const Avatar = ({ size }: { size: string }) =>
+  const renderAvatar = (size: string) =>
     profile.photo_url ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -106,7 +123,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       case "minimal":
         return (
           <div className="flex flex-col items-center pt-14 pb-8 px-6 text-center">
-            <Avatar size="w-24 h-24" />
+            {renderAvatar("w-24 h-24")}
             <h1 className={`mt-5 text-2xl font-semibold tracking-tight ${textClass}`}>{profile.display_name}</h1>
             {profile.title && <p className={`mt-1 text-sm ${subClass}`}>{profile.title}</p>}
             <div className={`mt-4 h-px w-12 ${palette.accent} opacity-40`} />
@@ -127,7 +144,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
           <div className="relative">
             <div className={`h-28 ${palette.accent}`} />
             <div className="px-6 -mt-12 flex items-end gap-4">
-              <Avatar size="w-24 h-24" />
+              {renderAvatar("w-24 h-24")}
               <div className="pb-1">
                 <h1 className={`text-2xl font-bold tracking-tight ${textClass}`}>{profile.display_name}</h1>
                 {profile.title && <p className={`text-sm font-medium ${subClass}`}>{profile.title}</p>}
@@ -155,7 +172,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
           <div className="relative flex flex-col items-center justify-end text-center px-6 pt-24 pb-10 min-h-[20rem]">
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
             <div className="relative z-10 flex flex-col items-center">
-              <Avatar size="w-36 h-36" />
+              {renderAvatar("w-36 h-36")}
               <h1 className={`mt-5 text-4xl font-extrabold tracking-tight ${textClass} drop-shadow`}>
                 {profile.display_name}
               </h1>
@@ -178,7 +195,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
         return (
           <div className="flex flex-col items-center pt-14 pb-10 px-6 text-center">
             <div className="mb-5">
-              <Avatar size="w-32 h-32" />
+              {renderAvatar("w-32 h-32")}
             </div>
             <h1 className={`text-3xl font-bold tracking-tight ${textClass}`}>{profile.display_name}</h1>
             {profile.title && <p className={`mt-1.5 text-base font-medium ${subClass}`}>{profile.title}</p>}
@@ -201,6 +218,43 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   // ── Shared body sections ──────────────────────────────────────────────────
   const body = (
     <div className="px-4 flex flex-col gap-3">
+      {hasContactDetails && (
+        <div className={`${sectionCardClass} rounded-2xl p-4`}>
+          <h2 className={`text-xs font-semibold uppercase tracking-widest ${subClass} mb-3`}>{copy.contactInfo}</h2>
+          <div className="space-y-2">
+            {profile.phone && (
+              <a href={preview ? undefined : `tel:${profile.phone}`} className="block">
+                <p className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{copy.phone}</p>
+                <p className={`text-sm ${textClass}`}>{profile.phone}</p>
+              </a>
+            )}
+            {profile.email && (
+              <a href={preview ? undefined : `mailto:${profile.email}`} className="block">
+                <p className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{copy.email}</p>
+                <p className={`text-sm ${textClass} break-all`}>{profile.email}</p>
+              </a>
+            )}
+            {profile.website && (
+              <a
+                href={preview ? undefined : (profile.website.startsWith("http") ? profile.website : `https://${profile.website}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <p className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{copy.website}</p>
+                <p className={`text-sm ${textClass} break-all`}>{profile.website.replace(/^https?:\/\//, "")}</p>
+              </a>
+            )}
+            {profile.address && (
+              <div>
+                <p className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{copy.address}</p>
+                <p className={`text-sm ${textClass}`}>{profile.address}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className={`${sectionCardClass} rounded-2xl p-4`}>
         <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={useHighContrastDarkText} />
       </div>
@@ -216,6 +270,19 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
         </svg>
         {copy.saveContact}
       </a>
+
+      {!preview && (
+        <a
+          href={walletUrl}
+          className={`flex items-center justify-center gap-2 rounded-2xl ${inquiryClass} font-semibold py-4 text-sm transition`}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+            <rect x="2" y="6" width="20" height="14" rx="2" />
+            <line x1="2" y1="10" x2="22" y2="10" />
+          </svg>
+          {copy.addToWallet}
+        </a>
+      )}
 
       {!preview && (
         <a
@@ -282,6 +349,27 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       {profile.social_links?.length > 0 && (
         <div className={`${sectionCardClass} rounded-2xl p-4`}>
           <h2 className={`text-xs font-semibold uppercase tracking-widest ${subClass} mb-3`}>{copy.connect}</h2>
+          {hasSocialDetails && (
+            <div className="mb-3 space-y-2">
+              <h3 className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{copy.socialProfiles}</h3>
+              {profile.social_links.map((link) => {
+                const href = link.url.startsWith("http") ? link.url : `https://${link.url}`;
+                const display = link.url.replace(/^https?:\/\//, "");
+                return (
+                  <a
+                    key={`detail-${link.id}`}
+                    href={preview ? undefined : href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <p className={`text-[11px] uppercase tracking-wide ${subClass} opacity-80`}>{link.platform}</p>
+                    <p className={`text-sm ${textClass} break-all`}>{display}</p>
+                  </a>
+                );
+              })}
+            </div>
+          )}
           <SocialLinks links={profile.social_links} />
         </div>
       )}
