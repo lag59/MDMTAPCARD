@@ -11,6 +11,12 @@ import 'screens/verify_nfc_screen.dart';
 import 'screens/nfc_inventory_screen.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/settings_screen.dart';
+import 'services/api_client.dart';
+
+Future<String?> _adminOnlyRedirect() async {
+  final allowed = await ApiClient.canProgramNfc();
+  return allowed ? null : '/dashboard';
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -29,14 +35,25 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (ctx, state) => CardPreviewScreen(profileId: state.pathParameters['id']!),
       ),
       GoRoute(
+        path: '/cards/:profileId/program-nfc',
+        redirect: (ctx, state) async => _adminOnlyRedirect(),
+        builder: (ctx, state) => WriteNfcScreen(profileId: state.pathParameters['profileId']!),
+      ),
+      GoRoute(
         path: '/nfc/write/:profileId',
+        redirect: (ctx, state) async => _adminOnlyRedirect(),
         builder: (ctx, state) => WriteNfcScreen(profileId: state.pathParameters['profileId']!),
       ),
       GoRoute(
         path: '/nfc/verify/:tagId',
+        redirect: (ctx, state) async => _adminOnlyRedirect(),
         builder: (ctx, state) => VerifyNfcScreen(tagId: state.pathParameters['tagId']!),
       ),
-      GoRoute(path: '/nfc/inventory', builder: (ctx, state) => const NfcInventoryScreen()),
+      GoRoute(
+        path: '/nfc/inventory',
+        redirect: (ctx, state) async => _adminOnlyRedirect(),
+        builder: (ctx, state) => const NfcInventoryScreen(),
+      ),
       GoRoute(path: '/analytics', builder: (ctx, state) => const AnalyticsScreen()),
       GoRoute(path: '/settings', builder: (ctx, state) => const SettingsScreen()),
     ],

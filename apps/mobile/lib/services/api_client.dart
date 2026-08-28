@@ -38,6 +38,15 @@ class ApiClient {
     await _storage.delete(key: 'role');
   }
 
+  static Future<String?> getRole() async {
+    return _storage.read(key: 'role');
+  }
+
+  static Future<bool> canProgramNfc() async {
+    final role = await getRole();
+    return role == 'super_admin' || role == 'business_owner';
+  }
+
   // ── Profiles ─────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> createProfile(Map<String, dynamic> body) async {
@@ -53,7 +62,7 @@ class ApiClient {
   // ── NFC ───────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> prepareTag(String profileId) async {
-    final res = await _dio.post('/api/v1/nfc/prepare', data: {'profile_id': profileId});
+    final res = await _dio.post('/api/v1/profiles/$profileId/nfc/prepare');
     return res.data;
   }
 
@@ -65,8 +74,7 @@ class ApiClient {
     int? capacityBytes,
   }) async {
     final res = await _dio.post(
-      '/api/v1/nfc/confirm-write',
-      queryParameters: {'tag_id': tagId},
+      '/api/v1/nfc-tags/$tagId/confirm',
       data: {
         'verified_url': verifiedUrl,
         if (tagUid != null) 'tag_uid': tagUid,
@@ -77,8 +85,21 @@ class ApiClient {
     return res.data;
   }
 
-  static Future<void> lockTag(String tagId) async {
+  static Future<void> finalizeTag(String tagId) async {
     await _dio.post('/api/v1/nfc/lock', data: {'tag_id': tagId});
+  }
+
+  static Future<void> disableTag(String tagId, {String? reason}) async {
+    await _dio.post('/api/v1/nfc-tags/$tagId/disable', data: {'reason': reason});
+  }
+
+  static Future<void> replaceTag(String tagId, {String? reason}) async {
+    await _dio.post('/api/v1/nfc-tags/$tagId/replace', data: {'reason': reason});
+  }
+
+  static Future<Map<String, dynamic>> getProfileNfcStatus(String profileId) async {
+    final res = await _dio.get('/api/v1/profiles/$profileId/nfc');
+    return res.data;
   }
 
   static Future<List<dynamic>> getInventory() async {

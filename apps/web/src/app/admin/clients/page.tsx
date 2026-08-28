@@ -14,6 +14,17 @@ type Company = {
   complimentary_nfc_expires_at?: string | null;
 };
 
+const PLAN_LABELS: Record<string, string> = {
+  basic_monthly: "Basic ($3.99/month)",
+  basic_yearly: "Basic ($39/year)",
+  pro_monthly: "Pro ($6.99/month)",
+  pro_yearly: "Pro ($69/year)",
+  tap_starter: "Legacy Starter",
+  tap_business: "Legacy Business",
+  tap_team: "Legacy Team",
+  tap_pro: "Legacy Pro",
+};
+
 export default function ClientsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [grantingCompanyId, setGrantingCompanyId] = useState<string | null>(null);
@@ -51,7 +62,7 @@ export default function ClientsPage() {
   };
 
   const isBundlePlan = (plan: string) => {
-    return plan === "tap_business" || plan === "tap_team" || plan === "tap_pro";
+    return ["basic_monthly", "basic_yearly", "pro_monthly", "pro_yearly", "tap_business", "tap_team", "tap_pro"].includes(plan);
   };
 
   const addComplimentaryCard = async (company: Company) => {
@@ -114,7 +125,7 @@ export default function ClientsPage() {
               companies.map((company) => (
                 <tr key={company.id} className="border-t border-slate-100">
                   <td className="px-4 py-3 text-slate-800 font-medium">{company.name}</td>
-                  <td className="px-4 py-3 text-slate-600">{company.subscription_plan}</td>
+                  <td className="px-4 py-3 text-slate-600">{PLAN_LABELS[company.subscription_plan] ?? company.subscription_plan}</td>
                   <td className="px-4 py-3 text-slate-600">
                     <div>{company.complimentary_nfc_cards ?? 0} complimentary</div>
                     <div className="text-xs text-slate-400">exp: {formatDate(company.complimentary_nfc_expires_at ?? null)}</div>

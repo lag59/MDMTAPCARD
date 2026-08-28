@@ -25,6 +25,7 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
   bool _isEs = false;
   bool _isActive = true;
   bool _loading = false;
+  String _cardType = 'digital_only';
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -35,17 +36,17 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
       final profile = await ApiClient.createProfile({
         'display_name': _name.text.trim(),
         'title': _title.text.trim().isEmpty ? null : _title.text.trim(),
-        'company': _company.text.trim().isEmpty ? null : _company.text.trim(),
         'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
         'email': _email.text.trim().isEmpty ? null : _email.text.trim(),
         'website': _website.text.trim().isEmpty ? null : _website.text.trim(),
-        'whatsapp': _whatsapp.text.trim().isEmpty
+        'whatsapp_number': _whatsapp.text.trim().isEmpty
             ? null
             : _whatsapp.text.trim(),
         'address': _address.text.trim().isEmpty ? null : _address.text.trim(),
         'biography': _about.text.trim().isEmpty ? null : _about.text.trim(),
         'language': _isEs ? 'es' : 'en',
         'is_active': _isActive,
+        'card_type': _cardType,
         'social_links': [],
       });
 
@@ -233,6 +234,46 @@ class _CreateCardScreenState extends State<CreateCardScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('CARD TYPE', style: Theme.of(context).textTheme.labelLarge),
+                      const SizedBox(height: 10),
+                      RadioGroup<String>(
+                        groupValue: _cardType,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _cardType = value);
+                        },
+                        child: const Column(
+                          children: [
+                            RadioListTile<String>(
+                              value: 'digital_only',
+                              title: Text('Digital Card Only'),
+                              subtitle: Text('Share by link or QR code. No physical NFC product required.'),
+                            ),
+                            RadioListTile<String>(
+                              value: 'nfc_card',
+                              title: Text('NFC TapCard'),
+                              subtitle: Text('A full-size NFC business card that opens your digital profile with a tap.'),
+                            ),
+                            RadioListTile<String>(
+                              value: 'nfc_button',
+                              title: Text('NFC TapButton'),
+                              subtitle: Text('A compact adhesive NFC button that sticks to your phone, case, badge, counter, or display.'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
 
               Card(
                 child: SwitchListTile(

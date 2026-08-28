@@ -10,6 +10,10 @@ from app.database import Base
 
 
 class SubscriptionPlan(str, enum.Enum):
+    basic_monthly = "basic_monthly"
+    basic_yearly = "basic_yearly"
+    pro_monthly = "pro_monthly"
+    pro_yearly = "pro_yearly"
     tap_starter = "tap_starter"
     tap_business = "tap_business"
     tap_team = "tap_team"

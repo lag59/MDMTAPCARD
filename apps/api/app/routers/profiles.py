@@ -16,6 +16,8 @@ from app.utils.storage import save_public_asset
 
 router = APIRouter()
 
+_ALLOWED_CARD_TYPES = {"digital_only", "nfc_card", "nfc_button"}
+
 _ALLOWED_LOGO_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg", "image/gif": "gif"}
 _MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -41,6 +43,8 @@ class ProfileCreate(BaseModel):
     booking_url: str | None = None
     payment_url: str | None = None
     payment_label: str | None = None
+    card_type: str = "digital_only"
+    fulfillment_status: str | None = None
     social_links: List[SocialLinkIn] = []
     company_id: uuid.UUID | None = None
 
@@ -85,10 +89,19 @@ async def create_profile(
     else:
         profile_company_id = current_user.company_id
 
+    card_type = (body.card_type or "digital_only").strip()
+    if card_type not in _ALLOWED_CARD_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid card_type")
+    fulfillment_status = body.fulfillment_status
+    if not fulfillment_status:
+        fulfillment_status = "not_required" if card_type == "digital_only" else "awaiting_programming"
+
     profile = Profile(
         company_id=profile_company_id,
         slug=slug,
-        **body.model_dump(exclude={"social_links", "company_id"}),
+        **body.model_dump(exclude={"social_links", "company_id", "card_type", "fulfillment_status"}),
+        card_type=card_type,
+        fulfillment_status=fulfillment_status,
     )
     db.add(profile)
     await db.flush()
@@ -167,6 +180,8 @@ class ProfileUpdate(BaseModel):
     booking_url: str | None = None
     payment_url: str | None = None
     payment_label: str | None = None
+    card_type: str | None = None
+    fulfillment_status: str | None = None
     is_active: bool | None = None
     social_links: List[SocialLinkIn] | None = None
 
@@ -203,7 +218,17 @@ async def update_profile(
 ):
     profile = await _load_profile_for_edit(slug, current_user, db)
 
-    for field, value in body.model_dump(exclude={"social_links"}, exclude_unset=True).items():
+    if body.card_type is not None:
+        card_type = body.card_type.strip()
+        if card_type not in _ALLOWED_CARD_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid card_type")
+        profile.card_type = card_type
+        if card_type == "digital_only" and not body.fulfillment_status:
+            profile.fulfillment_status = "not_required"
+        elif card_type in {"nfc_card", "nfc_button"} and profile.fulfillment_status == "not_required":
+            profile.fulfillment_status = "awaiting_programming"
+
+    for field, value in body.model_dump(exclude={"social_links", "card_type"}, exclude_unset=True).items():
         setattr(profile, field, value)
 
     if body.social_links is not None:

@@ -7,6 +7,23 @@ def _auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _create_profile(client: httpx.Client, token: str, display_name: str, card_type: str) -> str:
+    response = client.post(
+        "/api/v1/profiles/",
+        headers=_auth_headers(token),
+        json={
+            "display_name": display_name,
+            "card_type": card_type,
+            "social_links": [],
+        },
+    )
+    response.raise_for_status()
+    payload = response.json()
+    profile_id = payload.get("id")
+    assert profile_id
+    return str(profile_id)
+
+
 def test_dashboard_role_access(client: httpx.Client, admin_token: str, owner_token: str) -> None:
     admin_resp = client.get("/api/v1/admin/dashboard", headers=_auth_headers(admin_token))
     assert admin_resp.status_code == 200
@@ -111,3 +128,41 @@ def test_square_checkout_endpoint_exists_for_unknown_order(client: httpx.Client,
 
     assert response.status_code == 404
     assert response.json().get("detail") == "Order not found"
+
+
+def test_prepare_nfc_rejects_digital_only_profile(client: httpx.Client, owner_token: str) -> None:
+    profile_id = _create_profile(
+        client,
+        owner_token,
+        display_name=f"Regression Digital {uuid.uuid4().hex[:6]}",
+        card_type="digital_only",
+    )
+
+    response = client.post(
+        f"/api/v1/profiles/{profile_id}/nfc/prepare",
+        headers=_auth_headers(owner_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json().get("detail") == "This digital-only profile does not require NFC programming."
+
+
+def test_prepare_nfc_allows_button_profiles(client: httpx.Client, owner_token: str) -> None:
+    profile_id = _create_profile(
+        client,
+        owner_token,
+        display_name=f"Regression Button {uuid.uuid4().hex[:6]}",
+        card_type="nfc_button",
+    )
+
+    response = client.post(
+        f"/api/v1/profiles/{profile_id}/nfc/prepare",
+        headers=_auth_headers(owner_token),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("profile_id") == profile_id
+    assert payload.get("hardware_type") == "button"
+    assert isinstance(payload.get("profile_url"), str)
+    assert "/t/" in payload["profile_url"]

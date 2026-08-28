@@ -1,7 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../services/api_client.dart';
 
-class NfcInventoryScreen extends StatelessWidget {
+class NfcInventoryScreen extends StatefulWidget {
   const NfcInventoryScreen({super.key});
+
+  @override
+  State<NfcInventoryScreen> createState() => _NfcInventoryScreenState();
+}
+
+class _NfcInventoryScreenState extends State<NfcInventoryScreen> {
+  bool _loading = true;
+  String? _error;
+  List<dynamic> _rows = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final data = await ApiClient.getInventory();
+      if (!mounted) return;
+      setState(() => _rows = data);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not load NFC inventory.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  int _countByStatus(String status) => _rows.where((r) => (r['status'] ?? '') == status).length;
 
   @override
   Widget build(BuildContext context) {
@@ -9,23 +45,43 @@ class NfcInventoryScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('NFC Inventory')),
       body: ListView(
         padding: const EdgeInsets.all(16),
-        children: const [
+        children: [
           Row(
             children: [
-              _StatCard(label: 'Activated', value: '0', color: Colors.green),
-              SizedBox(width: 10),
-              _StatCard(label: 'Failed', value: '0', color: Colors.red),
-              SizedBox(width: 10),
-              _StatCard(label: 'Replacements', value: '0', color: Colors.orange),
+              _StatCard(label: 'Verified', value: '${_countByStatus('verified')}', color: Colors.green),
+              const SizedBox(width: 10),
+              _StatCard(label: 'Failed', value: '${_countByStatus('failed')}', color: Colors.red),
+              const SizedBox(width: 10),
+              _StatCard(label: 'Replaced', value: '${_countByStatus('replaced')}', color: Colors.orange),
             ],
           ),
-          SizedBox(height: 16),
-          Card(
-            child: ListTile(
-              title: Text('No inventory records yet'),
-              subtitle: Text('Written tags, serial numbers, and programmer logs will appear here.'),
-            ),
-          ),
+          const SizedBox(height: 16),
+          if (_loading)
+            const Card(child: ListTile(title: Text('Loading NFC inventory…')))
+          else if (_error != null)
+            Card(child: ListTile(title: const Text('Error'), subtitle: Text(_error!)))
+          else if (_rows.isEmpty)
+            const Card(
+              child: ListTile(
+                title: Text('No tags programmed yet.'),
+                subtitle: Text('Use Program NFC Card on a customer card to write the first NFC tag.'),
+              ),
+            )
+          else
+            ..._rows.map((row) => Card(
+                  child: ListTile(
+                    title: Text(row['profile_name']?.toString() ?? row['profile_slug']?.toString() ?? 'Unknown profile'),
+                    subtitle: Text(
+                      'Status: ${row['status'] ?? 'unknown'} • Type: ${row['tag_type'] ?? 'N/A'}\nCard #: ${row['card_number'] ?? '—'}',
+                    ),
+                    trailing: row['profile_id'] != null
+                        ? TextButton(
+                            onPressed: () => context.push('/cards/${row['profile_id']}/program-nfc'),
+                            child: const Text('Program'),
+                          )
+                        : null,
+                  ),
+                )),
         ],
       ),
     );

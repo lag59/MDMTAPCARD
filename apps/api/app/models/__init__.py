@@ -2,7 +2,7 @@ from app.models.user import User, UserRole
 from app.models.company import Company, SubscriptionPlan, CompanyStatus
 from app.models.profile import Profile, SocialLink
 from app.models.nfc_tag import NfcTag, NfcTagStatus
-from app.models.events import TapEvent, Lead, LeadPhoneVerification
+from app.models.events import TapEvent, Lead, LeadPhoneVerification, NfcAuditEvent
 from app.models.order import Order, OrderStatus, PaymentStatus
 
 __all__ = [
@@ -10,6 +10,6 @@ __all__ = [
     "Company", "SubscriptionPlan", "CompanyStatus",
     "Profile", "SocialLink",
     "NfcTag", "NfcTagStatus",
-    "TapEvent", "Lead", "LeadPhoneVerification",
+    "TapEvent", "Lead", "LeadPhoneVerification", "NfcAuditEvent",
     "Order", "OrderStatus", "PaymentStatus",
 ]

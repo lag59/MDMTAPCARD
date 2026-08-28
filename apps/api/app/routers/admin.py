@@ -86,6 +86,10 @@ class SystemStatusResponse(BaseModel):
 
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
     return plan in {
+        SubscriptionPlan.basic_monthly,
+        SubscriptionPlan.basic_yearly,
+        SubscriptionPlan.pro_monthly,
+        SubscriptionPlan.pro_yearly,
         SubscriptionPlan.tap_business,
         SubscriptionPlan.tap_team,
         SubscriptionPlan.tap_pro,

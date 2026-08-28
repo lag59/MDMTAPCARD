@@ -27,6 +27,8 @@ class Profile(Base):
     booking_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # scheduling link (Calendly/Cal.com)
     payment_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # payment link (Stripe/PayPal)
     payment_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    card_type: Mapped[str] = mapped_column(String(30), default="digital_only")
+    fulfillment_status: Mapped[str] = mapped_column(String(40), default="not_required")
     language: Mapped[str] = mapped_column(String(10), default="en")  # "en" | "es"
     whatsapp_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

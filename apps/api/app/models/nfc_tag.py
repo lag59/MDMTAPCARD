@@ -15,6 +15,7 @@ class NfcTagStatus(str, enum.Enum):
     verified = "verified"
     activated = "activated"
     failed = "failed"
+    disabled = "disabled"
     replaced = "replaced"
     locked = "locked"
 
@@ -27,6 +28,8 @@ class NfcTag(Base):
     tag_token: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     company_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True)
     profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True)
+    public_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hardware_type: Mapped[str] = mapped_column(String(20), default="card")  # card | button
     tag_uid: Mapped[str | None] = mapped_column(String(100), nullable=True)  # hardware serial
     card_number: Mapped[str | None] = mapped_column(String(40), nullable=True)  # admin-visible label/number
     tag_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # NTAG213 / NTAG215 / NTAG216
@@ -35,6 +38,8 @@ class NfcTag(Base):
     status: Mapped[NfcTagStatus] = mapped_column(Enum(NfcTagStatus), default=NfcTagStatus.inventory)
     written_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     written_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

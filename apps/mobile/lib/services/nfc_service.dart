@@ -30,20 +30,31 @@ class NfcService {
   /// Reads back the tag immediately after writing to verify.
   static Future<NfcWriteResult> writeUrl(String url) async {
     final completer = Completer<NfcWriteResult>();
+    bool completed = false;
 
     await NfcManager.instance.startSession(
+      alertMessage: 'Hold the NFC card near your phone.',
       onDiscovered: (NfcTag tag) async {
+        if (completed) return;
         try {
           final ndef = Ndef.from(tag);
           if (ndef == null) {
+            completed = true;
             await NfcManager.instance.stopSession(errorMessage: 'Tag is not NDEF compatible.');
-            completer.complete(const NfcWriteResult(success: false, errorMessage: 'Tag is not NDEF compatible'));
+            completer.complete(const NfcWriteResult(
+              success: false,
+              errorMessage: 'This NFC tag is not supported. Use an NDEF-compatible NTAG213, NTAG215, or NTAG216 card.',
+            ));
             return;
           }
 
           if (!ndef.isWritable) {
+            completed = true;
             await NfcManager.instance.stopSession(errorMessage: 'Tag is read-only.');
-            completer.complete(const NfcWriteResult(success: false, errorMessage: 'Tag is read-only'));
+            completer.complete(const NfcWriteResult(
+              success: false,
+              errorMessage: 'This NFC card is locked and cannot be rewritten.',
+            ));
             return;
           }
 
@@ -53,8 +64,12 @@ class NfcService {
           // Check capacity before writing
           final encoded = message.byteLength;
           if (encoded > ndef.maxSize) {
+            completed = true;
             await NfcManager.instance.stopSession(errorMessage: 'URL too large for this tag.');
-            completer.complete(const NfcWriteResult(success: false, errorMessage: 'URL too large for tag capacity'));
+            completer.complete(const NfcWriteResult(
+              success: false,
+              errorMessage: 'This NFC tag does not have enough capacity for the card URL.',
+            ));
             return;
           }
 
@@ -67,6 +82,7 @@ class NfcService {
           final tagId = _extractTagId(tag);
           final tagTypeName = _extractTagType(tag);
 
+          completed = true;
           await NfcManager.instance.stopSession();
           completer.complete(NfcWriteResult(
             success: writtenUri == url,
@@ -77,9 +93,25 @@ class NfcService {
             errorMessage: writtenUri != url ? 'Verification mismatch' : null,
           ));
         } catch (e) {
+          completed = true;
           await NfcManager.instance.stopSession(errorMessage: e.toString());
-          completer.complete(NfcWriteResult(success: false, errorMessage: e.toString()));
+          completer.complete(
+              const NfcWriteResult(
+              success: false,
+              errorMessage: 'NFC write failed. Please keep the card still and try again.',
+            ),
+          );
         }
+      },
+      onError: (error) async {
+        if (completed) return;
+        completed = true;
+        completer.complete(
+          const NfcWriteResult(
+            success: false,
+            errorMessage: 'NFC session was cancelled or interrupted.',
+          ),
+        );
       },
     );
 
@@ -89,17 +121,27 @@ class NfcService {
   /// Read the current URL from a tag without writing.
   static Future<String?> readUrl() async {
     final completer = Completer<String?>();
+    bool completed = false;
     await NfcManager.instance.startSession(
+      alertMessage: 'Hold the NFC card near your phone.',
       onDiscovered: (NfcTag tag) async {
+        if (completed) return;
         final ndef = Ndef.from(tag);
         if (ndef == null) {
+          completed = true;
           await NfcManager.instance.stopSession();
           completer.complete(null);
           return;
         }
         final message = await ndef.read();
+        completed = true;
         await NfcManager.instance.stopSession();
         completer.complete(_extractUri(message));
+      },
+      onError: (error) async {
+        if (completed) return;
+        completed = true;
+        completer.complete(null);
       },
     );
     return completer.future;

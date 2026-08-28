@@ -53,7 +53,26 @@ type OrderEditState = Record<
   }
 >;
 
-const PLAN_OPTIONS = ["tap_starter", "tap_business", "tap_team", "tap_pro"] as const;
+const PLAN_OPTIONS = [
+  "basic_monthly",
+  "basic_yearly",
+  "pro_monthly",
+  "pro_yearly",
+  "tap_starter",
+  "tap_business",
+  "tap_team",
+  "tap_pro",
+] as const;
+const PLAN_META: Record<string, { label: string; amount: string }> = {
+  basic_monthly: { label: "Basic — $3.99/month", amount: "3.99" },
+  basic_yearly: { label: "Basic — $39/year", amount: "39.00" },
+  pro_monthly: { label: "Pro — $6.99/month", amount: "6.99" },
+  pro_yearly: { label: "Pro — $69/year", amount: "69.00" },
+  tap_starter: { label: "Legacy Starter", amount: "99.00" },
+  tap_business: { label: "Legacy Business", amount: "99.00" },
+  tap_team: { label: "Legacy Team", amount: "99.00" },
+  tap_pro: { label: "Legacy Pro", amount: "99.00" },
+};
 const STATUS_OPTIONS = ["pending", "paid", "cancelled", "refunded"] as const;
 const PAYMENT_OPTIONS = ["unpaid", "paid", "failed", "refunded"] as const;
 
@@ -70,9 +89,9 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState({
     company_id: "",
-    plan: "tap_business",
+    plan: "basic_monthly",
     seats: "1",
-    amount: "99.00",
+    amount: "3.99",
     currency: "USD",
     status: "pending",
     payment_status: "unpaid",
@@ -213,7 +232,7 @@ export default function OrdersPage() {
       setCreateForm((prev) => ({
         ...prev,
         seats: "1",
-        amount: "99.00",
+        amount: PLAN_META[prev.plan]?.amount ?? prev.amount,
         status: "pending",
         payment_status: "unpaid",
         period_start: "",
@@ -355,11 +374,17 @@ export default function OrdersPage() {
             <select
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
               value={createForm.plan}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, plan: e.target.value }))}
+              onChange={(e) =>
+                setCreateForm((prev) => ({
+                  ...prev,
+                  plan: e.target.value,
+                  amount: PLAN_META[e.target.value]?.amount ?? prev.amount,
+                }))
+              }
             >
               {PLAN_OPTIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {PLAN_META[option]?.label ?? option}
                 </option>
               ))}
             </select>
@@ -496,7 +521,7 @@ export default function OrdersPage() {
                     >
                       {PLAN_OPTIONS.map((option) => (
                         <option key={option} value={option}>
-                          {option}
+                          {PLAN_META[option]?.label ?? option}
                         </option>
                       ))}
                     </select>

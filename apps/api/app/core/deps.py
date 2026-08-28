@@ -83,3 +83,15 @@ async def get_tag_for_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AdminUser = Annotated[User, Depends(require_roles(UserRole.super_admin))]
+
+
+def require_nfc_admin():
+    async def checker(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+        if current_user.role not in {UserRole.super_admin, UserRole.business_owner}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="NFC programming is restricted to MDM TapCard administrators.",
+            )
+        return current_user
+
+    return checker
