@@ -128,6 +128,15 @@ export const PALETTES: Record<string, Palette> = {
     inquiry: "border border-white/40 text-white hover:bg-white/15",
     accent: "bg-indigo-700",
   },
+  brand: {
+    bg: "bg-gradient-to-br from-cyan-400 via-indigo-500 to-purple-700",
+    text: "text-white",
+    sub: "text-cyan-50",
+    glass: "bg-white/15 border border-white/25",
+    save: "bg-white text-indigo-900 hover:bg-indigo-50",
+    inquiry: "border border-white/40 text-white hover:bg-white/15",
+    accent: "bg-indigo-700",
+  },
   graphite: {
     bg: "bg-gradient-to-b from-zinc-800 to-zinc-950",
     text: "text-white",
@@ -164,6 +173,7 @@ export const TEMPLATES: CardTemplate[] = [
 
   // Spotlight layout — full-bleed hero with name overlaid.
   { id: "spotlight-aurora",   name: "Spotlight Aurora",   description: "Vivid aurora gradient hero.",     layout: "spotlight", palette: PALETTES.aurora,   swatch: "bg-indigo-500", category: "Spotlight" },
+  { id: "spotlight-brand",    name: "My Brand Card",      description: "Custom cyan-indigo spotlight hero.", layout: "spotlight", palette: PALETTES.brand,    swatch: "bg-indigo-600", category: "Spotlight" },
   { id: "spotlight-midnight", name: "Spotlight Midnight", description: "Dramatic violet spotlight.",      layout: "spotlight", palette: PALETTES.midnight, swatch: "bg-violet-700", category: "Spotlight" },
   { id: "spotlight-graphite", name: "Spotlight Graphite", description: "Sleek graphite hero, high-end.",  layout: "spotlight", palette: PALETTES.graphite, swatch: "bg-zinc-800", category: "Spotlight" },
 ];

@@ -62,3 +62,40 @@ def test_analytics_overview_shape(client: httpx.Client, owner_token: str) -> Non
     assert isinstance(payload["conversion_rate"], (int, float))
     assert isinstance(payload["by_event_type"], dict)
     assert isinstance(payload["daily"], list)
+
+
+def test_canonical_prepare_tag_endpoint_exists(client: httpx.Client, admin_token: str) -> None:
+    # A random profile UUID should pass routing/auth and fail with profile not found.
+    random_profile_id = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/profiles/{random_profile_id}/tags/prepare",
+        headers=_auth_headers(admin_token),
+    )
+
+    assert response.status_code == 404
+    assert response.json().get("detail") == "Profile not found"
+
+
+def test_canonical_confirm_tag_endpoint_exists(client: httpx.Client, admin_token: str) -> None:
+    # A random tag UUID should pass routing/auth and fail with tag not found.
+    random_tag_id = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/tags/{random_tag_id}/confirm",
+        headers=_auth_headers(admin_token),
+        json={"verified_url": "https://example.com/c/demo?tag=demo"},
+    )
+
+    assert response.status_code == 404
+    assert response.json().get("detail") == "Tag not found"
+
+
+def test_grant_complimentary_nfc_missing_company_returns_404(client: httpx.Client, admin_token: str) -> None:
+    random_company_id = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/admin/companies/{random_company_id}/complimentary-nfc",
+        headers=_auth_headers(admin_token),
+        json={"quantity": 1},
+    )
+
+    assert response.status_code == 404
+    assert response.json().get("detail") == "Company not found"

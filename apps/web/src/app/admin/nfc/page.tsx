@@ -7,9 +7,15 @@ type NfcTag = {
   id: string;
   tag_uid: string | null;
   tag_type: string | null;
+  capacity_bytes: number | null;
   status: string;
   written_at: string | null;
   written_by: string | null;
+  written_by_name: string | null;
+  profile_id: string | null;
+  profile_slug: string | null;
+  profile_name: string | null;
+  profile_url: string | null;
 };
 
 export default function NfcInventoryPage() {
@@ -97,17 +103,36 @@ export default function NfcInventoryPage() {
                 </td>
               </tr>
             ) : (
-              tags.map((tag) => (
+              {tags.map((tag) => (
                 <tr key={tag.id} className="border-t border-slate-100">
                   <td className="px-4 py-3 text-slate-700">{tag.tag_uid ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-700">{tag.tag_type ?? "—"}</td>
-                  <td className="px-4 py-3 text-slate-500">—</td>
+                  <td className="px-4 py-3 text-slate-700">
+                    <div>{tag.tag_type ?? "—"}</div>
+                    <div className="text-xs text-slate-400">{tag.capacity_bytes ? `${tag.capacity_bytes} bytes` : ""}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">
+                    {tag.profile_slug ? (
+                      <div>
+                        <div className="text-slate-700 font-medium">{tag.profile_name ?? tag.profile_slug}</div>
+                        <a
+                          href={tag.profile_url ?? `/c/${tag.profile_slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          /c/{tag.profile_slug}
+                        </a>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
                       {tag.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-500">{tag.written_by ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-500">{tag.written_by_name ?? tag.written_by ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(tag.written_at)}</td>
                 </tr>
               ))

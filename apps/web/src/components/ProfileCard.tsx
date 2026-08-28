@@ -11,6 +11,7 @@ import LeadForm from "./LeadForm";
 const i18n = {
   en: {
     saveContact: "Save Contact",
+    saveFallback: "Having trouble saving? Download .VCF",
     inquiry: "Send Inquiry",
     about: "About",
     connect: "Connect",
@@ -20,6 +21,7 @@ const i18n = {
   },
   es: {
     saveContact: "Guardar Contacto",
+    saveFallback: "¿Problemas para guardar? Descarga .VCF",
     inquiry: "Enviar Consulta",
     about: "Acerca de",
     connect: "Conectar",
@@ -42,6 +44,23 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   const { layout, palette, backgroundImage } = resolveTemplate(profile);
   const [showForm, setShowForm] = useState(false);
 
+  const paletteSurface = `${palette.bg} ${palette.glass}`.toLowerCase();
+  const paletteText = `${palette.text} ${palette.sub}`.toLowerCase();
+  const looksLightSurface = /(bg-white|from-white|to-white|via-white|slate-50|slate-100|neutral-50|zinc-50)/.test(
+    paletteSurface
+  );
+  const asksForWhiteText = /text-white/.test(paletteText);
+  const useHighContrastDarkText = looksLightSurface && asksForWhiteText;
+
+  const textClass = useHighContrastDarkText ? "text-slate-900" : palette.text;
+  const subClass = useHighContrastDarkText ? "text-slate-600" : palette.sub;
+  const inquiryClass = useHighContrastDarkText
+    ? "border border-slate-300 text-slate-800 hover:bg-slate-100"
+    : palette.inquiry;
+  const sectionCardClass = useHighContrastDarkText
+    ? "bg-white/90 border border-slate-200 shadow-sm"
+    : palette.glass;
+
   useEffect(() => {
     if (preview) return;
     trackEvent({
@@ -58,6 +77,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   }, [profile.id, tagToken, preview]);
 
   const vcardUrl = `/api/vcard/${profile.slug}`;
+  const vcardDownloadUrl = `/api/vcard/${profile.slug}?download=1`;
   const qrUrl = `${apiBaseUrl}/api/v1/profiles/qr/${profile.slug}`;
   const initials = profile.display_name
     .split(" ")
@@ -76,7 +96,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       />
     ) : (
       <div className={`${size} rounded-full bg-white/20 flex items-center justify-center shadow-2xl ring-4 ring-white/20`}>
-        <span className={`text-4xl font-bold ${palette.text} opacity-80`}>{initials}</span>
+        <span className={`text-4xl font-bold ${textClass} opacity-80`}>{initials}</span>
       </div>
     );
 
@@ -87,15 +107,15 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
         return (
           <div className="flex flex-col items-center pt-14 pb-8 px-6 text-center">
             <Avatar size="w-24 h-24" />
-            <h1 className={`mt-5 text-2xl font-semibold tracking-tight ${palette.text}`}>{profile.display_name}</h1>
-            {profile.title && <p className={`mt-1 text-sm ${palette.sub}`}>{profile.title}</p>}
+            <h1 className={`mt-5 text-2xl font-semibold tracking-tight ${textClass}`}>{profile.display_name}</h1>
+            {profile.title && <p className={`mt-1 text-sm ${subClass}`}>{profile.title}</p>}
             <div className={`mt-4 h-px w-12 ${palette.accent} opacity-40`} />
             {profile.website && (
               <a
                 href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`mt-3 text-xs ${palette.sub} hover:opacity-100 opacity-75 transition`}
+                className={`mt-3 text-xs ${subClass} hover:opacity-100 opacity-75 transition`}
               >
                 {profile.website.replace(/^https?:\/\//, "")}
               </a>
@@ -109,8 +129,8 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
             <div className="px-6 -mt-12 flex items-end gap-4">
               <Avatar size="w-24 h-24" />
               <div className="pb-1">
-                <h1 className={`text-2xl font-bold tracking-tight ${palette.text}`}>{profile.display_name}</h1>
-                {profile.title && <p className={`text-sm font-medium ${palette.sub}`}>{profile.title}</p>}
+                <h1 className={`text-2xl font-bold tracking-tight ${textClass}`}>{profile.display_name}</h1>
+                {profile.title && <p className={`text-sm font-medium ${subClass}`}>{profile.title}</p>}
               </div>
             </div>
             {(profile.website || profile.address) && (
@@ -120,12 +140,12 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
                     href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`block text-xs ${palette.sub} opacity-80 hover:opacity-100 transition`}
+                    className={`block text-xs ${subClass} opacity-80 hover:opacity-100 transition`}
                   >
                     {profile.website.replace(/^https?:\/\//, "")}
                   </a>
                 )}
-                {profile.address && <p className={`text-xs ${palette.sub} opacity-60`}>{profile.address}</p>}
+                {profile.address && <p className={`text-xs ${subClass} opacity-60`}>{profile.address}</p>}
               </div>
             )}
           </div>
@@ -136,16 +156,16 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
             <div className="relative z-10 flex flex-col items-center">
               <Avatar size="w-36 h-36" />
-              <h1 className={`mt-5 text-4xl font-extrabold tracking-tight ${palette.text} drop-shadow`}>
+              <h1 className={`mt-5 text-4xl font-extrabold tracking-tight ${textClass} drop-shadow`}>
                 {profile.display_name}
               </h1>
-              {profile.title && <p className={`mt-2 text-base font-medium ${palette.sub}`}>{profile.title}</p>}
+              {profile.title && <p className={`mt-2 text-base font-medium ${subClass}`}>{profile.title}</p>}
               {profile.website && (
                 <a
                   href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`mt-2 text-xs ${palette.sub} opacity-80 hover:opacity-100 transition`}
+                  className={`mt-2 text-xs ${subClass} opacity-80 hover:opacity-100 transition`}
                 >
                   {profile.website.replace(/^https?:\/\//, "")}
                 </a>
@@ -160,19 +180,19 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
             <div className="mb-5">
               <Avatar size="w-32 h-32" />
             </div>
-            <h1 className={`text-3xl font-bold tracking-tight ${palette.text}`}>{profile.display_name}</h1>
-            {profile.title && <p className={`mt-1.5 text-base font-medium ${palette.sub}`}>{profile.title}</p>}
+            <h1 className={`text-3xl font-bold tracking-tight ${textClass}`}>{profile.display_name}</h1>
+            {profile.title && <p className={`mt-1.5 text-base font-medium ${subClass}`}>{profile.title}</p>}
             {profile.website && (
               <a
                 href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`mt-2 text-xs ${palette.sub} opacity-75 hover:opacity-100 transition`}
+                className={`mt-2 text-xs ${subClass} opacity-75 hover:opacity-100 transition`}
               >
                 {profile.website.replace(/^https?:\/\//, "")}
               </a>
             )}
-            {profile.address && <p className={`mt-1 text-xs ${palette.sub} opacity-60`}>{profile.address}</p>}
+            {profile.address && <p className={`mt-1 text-xs ${subClass} opacity-60`}>{profile.address}</p>}
           </div>
         );
     }
@@ -181,13 +201,12 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   // ── Shared body sections ──────────────────────────────────────────────────
   const body = (
     <div className="px-4 flex flex-col gap-3">
-      <div className={`${palette.glass} rounded-2xl p-4`}>
-        <ContactButtons profile={profile} lang={lang} />
+      <div className={`${sectionCardClass} rounded-2xl p-4`}>
+        <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={useHighContrastDarkText} />
       </div>
 
       <a
         href={preview ? undefined : vcardUrl}
-        download
         className={`flex items-center justify-center gap-2 rounded-2xl ${palette.save} font-semibold py-4 text-sm shadow-md transition`}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -197,6 +216,15 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
         </svg>
         {copy.saveContact}
       </a>
+
+      {!preview && (
+        <a
+          href={vcardDownloadUrl}
+          className={`text-center text-xs ${subClass} hover:opacity-100 opacity-80 underline underline-offset-2`}
+        >
+          {copy.saveFallback}
+        </a>
+      )}
 
       {profile.whatsapp_number && (
         <a
@@ -245,30 +273,30 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       )}
 
       {profile.biography && (
-        <div className={`${palette.glass} rounded-2xl p-4`}>
-          <h2 className={`text-xs font-semibold uppercase tracking-widest ${palette.sub} mb-2`}>{copy.about}</h2>
-          <p className={`${palette.text} text-sm leading-relaxed opacity-90`}>{profile.biography}</p>
+        <div className={`${sectionCardClass} rounded-2xl p-4`}>
+          <h2 className={`text-xs font-semibold uppercase tracking-widest ${subClass} mb-2`}>{copy.about}</h2>
+          <p className={`${textClass} text-sm leading-relaxed opacity-90`}>{profile.biography}</p>
         </div>
       )}
 
       {profile.social_links?.length > 0 && (
-        <div className={`${palette.glass} rounded-2xl p-4`}>
-          <h2 className={`text-xs font-semibold uppercase tracking-widest ${palette.sub} mb-3`}>{copy.connect}</h2>
+        <div className={`${sectionCardClass} rounded-2xl p-4`}>
+          <h2 className={`text-xs font-semibold uppercase tracking-widest ${subClass} mb-3`}>{copy.connect}</h2>
           <SocialLinks links={profile.social_links} />
         </div>
       )}
 
       {!preview && (
-        <div className={`${palette.glass} rounded-2xl p-6 flex flex-col items-center gap-3`}>
+        <div className={`${sectionCardClass} rounded-2xl p-6 flex flex-col items-center gap-3`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qrUrl} alt="QR code" className="w-44 h-44 rounded-xl bg-white p-2 shadow-md" />
-          <p className={`text-xs ${palette.sub} text-center`}>{copy.scan}</p>
+          <p className={`text-xs ${subClass} text-center`}>{copy.scan}</p>
         </div>
       )}
 
       <button
         onClick={() => !preview && setShowForm((v) => !v)}
-        className={`rounded-2xl ${palette.inquiry} py-4 font-semibold text-sm transition`}
+        className={`rounded-2xl ${inquiryClass} py-4 font-semibold text-sm transition`}
       >
         {copy.inquiry}
       </button>
@@ -286,7 +314,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       <div className="w-full max-w-sm">
         {header}
         {body}
-        <p className={`text-center text-xs ${palette.sub} opacity-40 mt-8 mb-4`}>Powered by MDM TapCard</p>
+        <p className={`text-center text-xs ${subClass} opacity-40 mt-8 mb-4`}>Powered by MDM TapCard</p>
       </div>
     </main>
   );

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, Text, func
+from sqlalchemy import DateTime, Enum, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -31,6 +31,8 @@ class Company(Base):
     subscription_plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan), default=SubscriptionPlan.tap_starter)
     status: Mapped[CompanyStatus] = mapped_column(Enum(CompanyStatus), default=CompanyStatus.active)
     renewal_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    complimentary_nfc_cards: Mapped[int] = mapped_column(Integer, default=0)
+    complimentary_nfc_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="company")

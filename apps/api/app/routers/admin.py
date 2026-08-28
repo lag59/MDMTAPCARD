@@ -34,6 +34,16 @@ class UserCreate(BaseModel):
     company_id: uuid.UUID | None = None
 
 
+class ComplimentaryNfcGrantRequest(BaseModel):
+    quantity: int = 1
+
+
+class ComplimentaryNfcGrantResponse(BaseModel):
+    company_id: str
+    complimentary_nfc_cards: int
+    complimentary_nfc_expires_at: str
+
+
 class OrderCreate(BaseModel):
     company_id: uuid.UUID | None = None
     plan: SubscriptionPlan
@@ -57,6 +67,14 @@ class OrderUpdate(BaseModel):
     period_start: datetime | None = None
     period_end: datetime | None = None
     notes: str | None = None
+
+
+def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
+    return plan in {
+        SubscriptionPlan.tap_business,
+        SubscriptionPlan.tap_team,
+        SubscriptionPlan.tap_pro,
+    }
 
 
 @router.get("/dashboard")
@@ -118,6 +136,43 @@ async def list_companies(
 ):
     result = await db.execute(select(Company).order_by(Company.created_at.desc()))
     return result.scalars().all()
+
+
+@router.post("/companies/{company_id}/complimentary-nfc", response_model=ComplimentaryNfcGrantResponse)
+async def grant_complimentary_nfc(
+    company_id: uuid.UUID,
+    body: ComplimentaryNfcGrantRequest,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ComplimentaryNfcGrantResponse:
+    if body.quantity < 1:
+        raise HTTPException(status_code=400, detail="quantity must be at least 1")
+
+    company = await db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    if current_user.role == UserRole.business_owner and current_user.company_id != company.id:
+        raise HTTPException(status_code=403, detail="Cannot grant complimentary cards for another company")
+
+    if not _is_bundle_plan(company.subscription_plan):
+        raise HTTPException(status_code=400, detail="Complimentary NFC cards are only available for bundle plans")
+
+    now = datetime.now(timezone.utc)
+    if company.complimentary_nfc_expires_at and company.complimentary_nfc_expires_at > now:
+        company.complimentary_nfc_expires_at = company.complimentary_nfc_expires_at + timedelta(days=365)
+    else:
+        company.complimentary_nfc_expires_at = now + timedelta(days=365)
+
+    company.complimentary_nfc_cards = (company.complimentary_nfc_cards or 0) + body.quantity
+    await db.commit()
+    await db.refresh(company)
+
+    return ComplimentaryNfcGrantResponse(
+        company_id=str(company.id),
+        complimentary_nfc_cards=company.complimentary_nfc_cards,
+        complimentary_nfc_expires_at=company.complimentary_nfc_expires_at.isoformat(),
+    )
 
 
 @router.get("/profiles")

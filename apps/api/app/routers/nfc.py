@@ -16,9 +16,23 @@ from app.models.user import User
 from app.models.user import UserRole
 
 router = APIRouter()
+registration_router = APIRouter()
 
-# Only super_admin and programmer roles may write tags
-WriterUser = Annotated[User, Depends(require_roles(UserRole.super_admin, UserRole.programmer))]
+# Users who can prepare/confirm writes from mobile.
+WriterUser = Annotated[
+    User,
+    Depends(
+        require_roles(
+            UserRole.super_admin,
+            UserRole.programmer,
+            UserRole.business_owner,
+            UserRole.employee,
+        )
+    ),
+]
+
+# Users who can view inventory.
+InventoryUser = WriterUser
 
 
 class TagPrepareRequest(BaseModel):
@@ -48,14 +62,27 @@ class TagLockRequest(BaseModel):
     tag_id: uuid.UUID
 
 
-@router.post("/prepare", response_model=TagPrepareResponse)
-async def prepare_tag(
-    body: TagPrepareRequest,
-    current_user: WriterUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """Reserve a tag record and return the URL to write onto the physical chip."""
-    profile = await db.get(Profile, body.profile_id)
+class InventoryTagRow(BaseModel):
+    id: uuid.UUID
+    tag_uid: str | None = None
+    tag_type: str | None = None
+    capacity_bytes: int | None = None
+    status: str
+    written_at: datetime | None = None
+    written_by: uuid.UUID | None = None
+    written_by_name: str | None = None
+    profile_id: uuid.UUID | None = None
+    profile_slug: str | None = None
+    profile_name: str | None = None
+    profile_url: str | None = None
+
+
+async def _prepare_tag_for_profile(
+    profile_id: uuid.UUID,
+    current_user: User,
+    db: AsyncSession,
+) -> TagPrepareResponse:
+    profile = await db.get(Profile, profile_id)
     if not profile or not profile.is_active:
         raise HTTPException(status_code=404, detail="Profile not found")
     enforce_company_ownership(current_user, profile.company_id)
@@ -76,14 +103,12 @@ async def prepare_tag(
     return TagPrepareResponse(tag_id=tag.id, profile_url=url, tag_token=token)
 
 
-@router.post("/confirm-write", response_model=TagWriteResult)
-async def confirm_write(
-    body: TagWriteConfirm,
+async def _confirm_tag_write(
     tag_id: uuid.UUID,
-    current_user: WriterUser,
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """Called by the mobile app after writing. Verifies URL and marks the tag."""
+    body: TagWriteConfirm,
+    current_user: User,
+    db: AsyncSession,
+) -> TagWriteResult:
     tag = await db.get(NfcTag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
@@ -108,6 +133,48 @@ async def confirm_write(
     return TagWriteResult(tag_id=tag.id, status="activated", success=True)
 
 
+@router.post("/prepare", response_model=TagPrepareResponse)
+async def prepare_tag(
+    body: TagPrepareRequest,
+    current_user: WriterUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Reserve a tag record and return the URL to write onto the physical chip."""
+    return await _prepare_tag_for_profile(body.profile_id, current_user, db)
+
+
+@registration_router.post("/profiles/{profile_id}/tags/prepare", response_model=TagPrepareResponse)
+async def prepare_tag_alias(
+    profile_id: uuid.UUID,
+    current_user: WriterUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Alias endpoint for tag reservation using a profile path parameter."""
+    return await _prepare_tag_for_profile(profile_id, current_user, db)
+
+
+@router.post("/confirm-write", response_model=TagWriteResult)
+async def confirm_write(
+    body: TagWriteConfirm,
+    tag_id: uuid.UUID,
+    current_user: WriterUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Called by the mobile app after writing. Verifies URL and marks the tag."""
+    return await _confirm_tag_write(tag_id, body, current_user, db)
+
+
+@registration_router.post("/tags/{tag_id}/confirm", response_model=TagWriteResult)
+async def confirm_write_alias(
+    tag_id: uuid.UUID,
+    body: TagWriteConfirm,
+    current_user: WriterUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Alias endpoint for confirming writes using a canonical tag path parameter."""
+    return await _confirm_tag_write(tag_id, body, current_user, db)
+
+
 @router.post("/lock", status_code=status.HTTP_200_OK)
 async def lock_tag(
     body: TagLockRequest,
@@ -130,11 +197,44 @@ async def lock_tag(
 
 @router.get("/inventory")
 async def list_inventory(
-    current_user: WriterUser,
+    current_user: InventoryUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    query = select(NfcTag).order_by(NfcTag.created_at.desc()).limit(200)
+    query = (
+        select(
+            NfcTag,
+            Profile.display_name,
+            Profile.slug,
+            User.name,
+        )
+        .outerjoin(Profile, Profile.id == NfcTag.profile_id)
+        .outerjoin(User, User.id == NfcTag.written_by)
+        .order_by(NfcTag.created_at.desc())
+        .limit(200)
+    )
     if current_user.role != UserRole.super_admin and current_user.company_id:
         query = query.where(NfcTag.company_id == current_user.company_id)
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.all()
+
+    inventory: list[InventoryTagRow] = []
+    for tag, profile_name, profile_slug, writer_name in rows:
+        profile_url = f"{settings.PROFILE_BASE_URL}/{profile_slug}" if profile_slug else None
+        inventory.append(
+            InventoryTagRow(
+                id=tag.id,
+                tag_uid=tag.tag_uid,
+                tag_type=tag.tag_type,
+                capacity_bytes=tag.capacity_bytes,
+                status=tag.status.value if isinstance(tag.status, NfcTagStatus) else str(tag.status),
+                written_at=tag.written_at,
+                written_by=tag.written_by,
+                written_by_name=writer_name,
+                profile_id=tag.profile_id,
+                profile_slug=profile_slug,
+                profile_name=profile_name,
+                profile_url=profile_url,
+            )
+        )
+
+    return inventory
