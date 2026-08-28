@@ -62,6 +62,23 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL"))
         await conn.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL"))
 
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS nfc_audit_events (
+                    id UUID PRIMARY KEY,
+                    company_id UUID NULL REFERENCES companies(id),
+                    profile_id UUID NULL REFERENCES profiles(id),
+                    tag_id UUID NULL REFERENCES nfc_tags(id),
+                    actor_user_id UUID NULL REFERENCES users(id),
+                    action VARCHAR(64) NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_nfc_audit_events_created_at ON nfc_audit_events(created_at)"))
+
         # Enum evolution is still handled by Alembic migrations.
 
 

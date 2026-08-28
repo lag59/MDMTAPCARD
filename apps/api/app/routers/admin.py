@@ -164,6 +164,22 @@ async def schema_repair(
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS hardware_type VARCHAR(20) NOT NULL DEFAULT 'card'"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL"))
+    await db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS nfc_audit_events (
+              id UUID PRIMARY KEY,
+              company_id UUID NULL REFERENCES companies(id),
+              profile_id UUID NULL REFERENCES profiles(id),
+              tag_id UUID NULL REFERENCES nfc_tags(id),
+              actor_user_id UUID NULL REFERENCES users(id),
+              action VARCHAR(64) NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+    )
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_nfc_audit_events_created_at ON nfc_audit_events(created_at)"))
     await db.commit()
     return SchemaRepairResponse(success=True, message="Schema repair applied")
 
