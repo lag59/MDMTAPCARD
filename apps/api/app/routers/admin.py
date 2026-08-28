@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -77,6 +77,13 @@ class SquareCheckoutResponse(BaseModel):
     payment_link_id: str
 
 
+class SystemStatusResponse(BaseModel):
+    api_version: str
+    db_ok: bool
+    alembic_revision: str | None = None
+    server_time: str
+
+
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
     return plan in {
         SubscriptionPlan.tap_business,
@@ -111,6 +118,30 @@ async def dashboard(
         "total_taps": taps,
         "total_leads": leads,
     }
+
+
+@router.get("/system-status", response_model=SystemStatusResponse)
+async def system_status(
+        current_user: Annotated[User, AdminOrOwner],
+        db: Annotated[AsyncSession, Depends(get_db)],
+) -> SystemStatusResponse:
+        del current_user
+
+        db_ok = True
+        revision: str | None = None
+        try:
+                alive = (await db.execute(text("SELECT 1"))).scalar_one()
+                db_ok = alive == 1
+                revision = (await db.execute(text("SELECT version_num FROM alembic_version LIMIT 1"))).scalar_one_or_none()
+        except Exception:
+                db_ok = False
+
+        return SystemStatusResponse(
+                api_version="1.0.0",
+                db_ok=db_ok,
+                alembic_revision=revision,
+                server_time=datetime.now(timezone.utc).isoformat(),
+        )
 
 
 @router.get("/me")

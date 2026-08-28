@@ -81,6 +81,10 @@ export async function createSquareCheckout<T = { checkout_url: string }>(orderId
   return apiPost<T>(`/api/v1/admin/orders/${orderId}/square-checkout`, {});
 }
 
+export async function getAdminSystemStatus<T = { api_version: string; db_ok: boolean; alembic_revision?: string | null; server_time: string }>(): Promise<T> {
+  return apiGet<T>("/api/v1/admin/system-status");
+}
+
 export async function fetchProfile(slug: string) {
   const res = await fetch(`${BASE_URL}/api/v1/profiles/${slug}`, {
     cache: "no-store",
