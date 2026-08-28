@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 import TemplatePreview from "./TemplatePreview";
 import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
@@ -181,7 +182,14 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
           </p>
           {values.photo_url ? (
             <div className="mt-3 flex items-center gap-3">
-              <img src={values.photo_url} alt="Logo preview" className="w-20 h-20 rounded-lg object-cover border border-slate-200" />
+              <Image
+                src={values.photo_url}
+                alt="Logo preview"
+                width={80}
+                height={80}
+                unoptimized
+                className="w-20 h-20 rounded-lg object-cover border border-slate-200"
+              />
               <button
                 type="button"
                 onClick={() => setValues((v) => ({ ...v, photo_url: "" }))}
