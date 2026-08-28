@@ -32,15 +32,20 @@ async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): P
     throw new Error("No access token found. Please sign in again.");
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(`Network error reaching API at ${BASE_URL}. Verify frontend env vars, CORS, and backend health.`);
+  }
 
   if (!response.ok) {
     let detail = `Request failed with status ${response.status}`;
