@@ -2,8 +2,7 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+import { apiBaseUrl } from "@/lib/api";
 
 export default function LoginPage() {
   return (
@@ -29,7 +28,7 @@ function LoginForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${apiUrl}/api/v1/auth/login`, {
+      const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -47,7 +46,7 @@ function LoginForm() {
 
       router.replace(next);
     } catch {
-      setError("Could not reach API. Make sure backend is running on localhost:8000.");
+      setError("Could not reach API. Check the API base URL configuration and CORS settings.");
       setLoading(false);
     }
   };

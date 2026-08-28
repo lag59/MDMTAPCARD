@@ -19,6 +19,8 @@ export default function EditCardPage() {
   const [copied, setCopied] = useState(false);
   const [exported, setExported] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<Record<string, number> | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -29,6 +31,16 @@ export default function EditCardPage() {
       .then((me) => setRole(me.role))
       .catch(() => setRole(null));
   }, [slug]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    apiGet<Record<string, number>>(`/api/v1/analytics/summary/${profile.id}`)
+      .then((data) => {
+        setAnalytics(data);
+        setAnalyticsError(null);
+      })
+      .catch((e) => setAnalyticsError(e instanceof Error ? e.message : "Could not load analytics summary."));
+  }, [profile?.id]);
 
   const handleSubmit = async (values: CardFormValues) => {
     const updated = await apiPatch<Profile>(`/api/v1/profiles/${slug}`, {
@@ -145,6 +157,7 @@ export default function EditCardPage() {
   };
 
   const isSuperAdmin = role === "super_admin";
+  const totalInteractions = analytics ? Object.values(analytics).reduce((sum, count) => sum + count, 0) : 0;
 
   return (
     <div>
@@ -194,6 +207,31 @@ export default function EditCardPage() {
 
       <div className="bg-white rounded-xl shadow p-6 max-w-2xl">
         <CardForm key={profile.slug} initial={initial} onSubmit={handleSubmit} submitLabel="Save Changes" />
+      </div>
+
+      <div className="bg-white rounded-xl shadow p-6 max-w-2xl mt-6">
+        <h2 className="text-lg font-semibold text-slate-800">Profile Analytics Summary</h2>
+        {analyticsError ? (
+          <p className="mt-3 text-sm text-red-600">{analyticsError}</p>
+        ) : analytics ? (
+          <div className="mt-4">
+            <p className="text-sm text-slate-600">Total interactions: <span className="font-semibold text-slate-800">{totalInteractions}</span></p>
+            {Object.keys(analytics).length === 0 ? (
+              <p className="text-sm text-slate-500 mt-2">No interaction events yet.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {Object.entries(analytics).map(([eventType, count]) => (
+                  <li key={eventType} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2 text-sm">
+                    <span className="text-slate-700">{eventType}</span>
+                    <span className="font-semibold text-slate-900">{count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate-500">Loading analytics…</p>
+        )}
       </div>
     </div>
   );

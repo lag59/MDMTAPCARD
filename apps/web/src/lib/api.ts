@@ -1,4 +1,26 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "http://localhost:8000";
+const PROD_API_FALLBACK = "https://mdm-tapcard-api.fly.dev";
+
+function normalizeBaseUrl(url: string): string {
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+}
+
+function resolveApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL;
+  if (envUrl) {
+    return normalizeBaseUrl(envUrl);
+  }
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+  }
+
+  return PROD_API_FALLBACK;
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 export const apiBaseUrl = BASE_URL;
 

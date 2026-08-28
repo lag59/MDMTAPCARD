@@ -54,6 +54,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         {[
           ["Dashboard", "/admin"],
+          ["Users", "/admin/users"],
           ["Clients", "/admin/clients"],
           ["Digital Cards", "/admin/cards"],
           ["Leads", "/admin/leads"],
