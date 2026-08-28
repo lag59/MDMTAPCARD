@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { apiBaseUrl } from "@/lib/api";
 
 interface Props {
 	params: Promise<{ slug: string }>;
@@ -7,8 +6,9 @@ interface Props {
 
 export default async function PublicTokenRoute({ params }: Props) {
 	const { slug } = await params;
+	const serverApiBase = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-	const res = await fetch(`${apiBaseUrl}/api/v1/t/${slug}`, { cache: "no-store" });
+	const res = await fetch(`${serverApiBase}/api/v1/t/${slug}`, { cache: "no-store" });
 	if (!res.ok) {
 		return (
 			<main className="min-h-screen flex items-center justify-center bg-slate-100 px-6">

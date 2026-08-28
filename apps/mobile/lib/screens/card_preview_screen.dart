@@ -43,7 +43,7 @@ class _CardPreviewScreenState extends State<CardPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final profileId = widget.profileId;
-    final profileUrl = 'https://tap.mdmcreation.com/profile/$profileId';
+    final profileUrl = _status?['profile_url']?.toString() ?? 'https://mdmsolutionlab.com/t/$profileId';
     final statusLabel = _status?['status']?.toString() ?? 'not_programmed';
     final verified = _status?['is_verified'] == true;
     final cardType = _status?['card_type']?.toString() ?? 'digital_only';

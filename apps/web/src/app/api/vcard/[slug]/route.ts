@@ -7,9 +7,10 @@ export async function GET(
 ) {
   const { slug } = await params;
   const disposition = req.nextUrl.searchParams.get("download") === "1" ? "attachment" : "inline";
+  const apiBase = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
   const apiRes = await fetch(
-    `${process.env.API_URL ?? "http://localhost:8000"}/api/v1/profiles/${slug}`,
+    `${apiBase}/api/v1/profiles/${slug}`,
     { next: { revalidate: 60 } }
   );
 

@@ -24,9 +24,10 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await params;
+  const apiBase = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
   const apiRes = await fetch(
-    `${process.env.API_URL ?? "http://localhost:8000"}/api/v1/profiles/${slug}`,
+    `${apiBase}/api/v1/profiles/${slug}`,
     { next: { revalidate: 60 } }
   );
 
