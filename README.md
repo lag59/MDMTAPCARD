@@ -168,10 +168,17 @@ Optional flags:
 
 ### Full reset helper
 
-This removes containers and volumes, rebuilds, migrates, and reseeds demo data.
+Safe mode (default): recreates containers, rebuilds, migrates, and reseeds demo data
+while preserving database volumes (NFC tags remain intact).
 
 ```powershell
 .\reset-backend.ps1
+```
+
+Destructive mode (erases DB volumes and all NFC tag records) requires explicit confirmation:
+
+```powershell
+.\reset-backend.ps1 -DestroyData -Confirm ERASE
 ```
 
 Optional flag:
@@ -179,3 +186,10 @@ Optional flag:
 ```powershell
 .\reset-backend.ps1 -NoBuild
 ```
+
+### NFC data durability on updates
+
+- Regular code pushes and container rebuilds do **not** erase NFC cards.
+- NFC tag records live in PostgreSQL (`postgres_data` Docker volume).
+- Migrations run with `alembic upgrade head` and are additive for NFC tables.
+- Data is only erased if volumes are explicitly removed (for example with destructive reset).
