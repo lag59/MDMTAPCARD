@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("nfc_tags", sa.Column("card_number", sa.String(length=40), nullable=True))
+    op.execute("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS card_number VARCHAR(40) NULL")
 
 
 def downgrade() -> None:
