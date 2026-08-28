@@ -139,6 +139,7 @@ export async function submitLead(payload: {
   message?: string;
   consent_to_contact: boolean;
   consent_text?: string;
+  phone_verification_id?: string;
 }) {
   const res = await fetch(`${BASE_URL}/api/v1/leads/`, {
     method: "POST",
@@ -146,4 +147,49 @@ export async function submitLead(payload: {
     body: JSON.stringify(payload),
   });
   return res.ok;
+}
+
+export async function startLeadPhoneOtp(payload: {
+  profile_id: string;
+  tag_token?: string;
+  phone: string;
+}): Promise<{ verification_id: string; expires_at: string; provider: string; debug_code?: string | null }> {
+  const res = await fetch(`${BASE_URL}/api/v1/leads/otp/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = "Could not send verification code.";
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback detail
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as { verification_id: string; expires_at: string; provider: string; debug_code?: string | null };
+}
+
+export async function verifyLeadPhoneOtp(payload: {
+  verification_id: string;
+  code: string;
+}): Promise<{ verified: boolean }> {
+  const res = await fetch(`${BASE_URL}/api/v1/leads/otp/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let detail = "Could not verify code.";
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback detail
+    }
+    throw new Error(detail);
+  }
+  return (await res.json()) as { verified: boolean };
 }

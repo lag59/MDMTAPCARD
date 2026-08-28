@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     SQUARE_API_BASE_URL: str = ""
     SQUARE_CHECKOUT_REDIRECT_URL: str = ""
 
+    # Lead phone OTP verification
+    OTP_PROVIDER: str = "mock"  # mock | twilio
+    OTP_CODE_TTL_SECONDS: int = 600
+    OTP_RESEND_COOLDOWN_SECONDS: int = 45
+    OTP_TWILIO_ACCOUNT_SID: str = ""
+    OTP_TWILIO_AUTH_TOKEN: str = ""
+    OTP_TWILIO_FROM_NUMBER: str = ""
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_allowed_origins(cls, v):

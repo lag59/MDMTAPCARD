@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { submitLead } from "@/lib/api";
+import { startLeadPhoneOtp, submitLead, verifyLeadPhoneOtp } from "@/lib/api";
 
 const copy = {
   en: {
     name: "Your Name",
     email: "Email",
     phone: "Phone",
+    sendCode: "Send Code",
+    code: "Verification Code",
+    verifyCode: "Verify Code",
+    phoneVerified: "Phone verified",
+    phoneRequired: "Verify your phone to continue.",
+    mockCode: "Test code",
     message: "Message",
     consent: "I agree to be contacted by phone/text/email.",
     send: "Send",
@@ -18,6 +24,12 @@ const copy = {
     name: "Tu Nombre",
     email: "Correo",
     phone: "Teléfono",
+    sendCode: "Enviar código",
+    code: "Código de verificación",
+    verifyCode: "Verificar código",
+    phoneVerified: "Teléfono verificado",
+    phoneRequired: "Verifica tu teléfono para continuar.",
+    mockCode: "Código de prueba",
     message: "Mensaje",
     consent: "Acepto ser contactado por teléfono/SMS/correo.",
     send: "Enviar",
@@ -35,13 +47,61 @@ interface Props {
 export default function LeadForm({ profileId, tagToken, lang }: Props) {
   const c = copy[lang];
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpVerificationId, setOtpVerificationId] = useState<string | null>(null);
+  const [otpDebugCode, setOtpDebugCode] = useState<string | null>(null);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "", consent_to_contact: false });
+
+  const phoneChangedAfterVerify = otpVerified && form.phone.trim().length > 0;
+
+  async function handleSendCode() {
+    if (!form.phone.trim()) return;
+    setSendingOtp(true);
+    setOtpError(null);
+    try {
+      const result = await startLeadPhoneOtp({
+        profile_id: profileId,
+        tag_token: tagToken,
+        phone: form.phone,
+      });
+      setOtpVerificationId(result.verification_id);
+      setOtpDebugCode(result.debug_code ?? null);
+      setOtpVerified(false);
+    } catch (e) {
+      setOtpError(e instanceof Error ? e.message : "Could not send verification code.");
+    } finally {
+      setSendingOtp(false);
+    }
+  }
+
+  async function handleVerifyCode() {
+    if (!otpVerificationId || !otpCode.trim()) return;
+    setVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      const result = await verifyLeadPhoneOtp({ verification_id: otpVerificationId, code: otpCode.trim() });
+      setOtpVerified(Boolean(result.verified));
+    } catch (e) {
+      setOtpVerified(false);
+      setOtpError(e instanceof Error ? e.message : "Could not verify code.");
+    } finally {
+      setVerifyingOtp(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) return;
     if (!form.phone.trim() && !form.email.trim()) return;
     if (!form.consent_to_contact) return;
+    if (form.phone.trim() && !otpVerified) {
+      setOtpError(c.phoneRequired);
+      return;
+    }
     setStatus("sending");
     const ok = await submitLead({
       profile_id: profileId,
@@ -52,6 +112,7 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
       message: form.message,
       consent_to_contact: form.consent_to_contact,
       consent_text: c.consent,
+      phone_verification_id: otpVerificationId ?? undefined,
     });
     setStatus(ok ? "done" : "error");
   }
@@ -81,9 +142,52 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
         required={!form.email.trim()}
         placeholder={c.phone}
         value={form.phone}
-        onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+        onChange={(e) => {
+          const nextPhone = e.target.value;
+          setForm((f) => ({ ...f, phone: nextPhone }));
+          setOtpVerified(false);
+          setOtpVerificationId(null);
+          setOtpCode("");
+          setOtpDebugCode(null);
+          setOtpError(null);
+        }}
         className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
       />
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleSendCode}
+          disabled={sendingOtp || !form.phone.trim()}
+          className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+        >
+          {sendingOtp ? "…" : c.sendCode}
+        </button>
+        {otpVerified && !phoneChangedAfterVerify ? (
+          <span className="text-xs text-green-300">{c.phoneVerified}</span>
+        ) : null}
+      </div>
+      {otpVerificationId ? (
+        <div className="flex items-center gap-2">
+          <input
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value)}
+            placeholder={c.code}
+            className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
+          />
+          <button
+            type="button"
+            onClick={handleVerifyCode}
+            disabled={verifyingOtp || !otpCode.trim()}
+            className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+          >
+            {verifyingOtp ? "…" : c.verifyCode}
+          </button>
+        </div>
+      ) : null}
+      {otpDebugCode ? (
+        <p className="text-[11px] text-amber-200">{c.mockCode}: {otpDebugCode}</p>
+      ) : null}
+      {otpError ? <p className="text-red-400 text-xs">{otpError}</p> : null}
       <textarea
         rows={3}
         placeholder={c.message}
