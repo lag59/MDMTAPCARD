@@ -27,6 +27,33 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _ensure_alembic_version_column_capacity(connection) -> None:
+    """Prevent migration failures when revision ids exceed legacy varchar(32)."""
+    try:
+        from sqlalchemy import text
+
+        exists = connection.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'alembic_version'
+                  AND column_name = 'version_num'
+                LIMIT 1
+                """
+            )
+        ).scalar_one_or_none()
+        if not exists:
+            return
+
+        connection.execute(
+            text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)")
+        )
+    except Exception:
+        # Best-effort safeguard; migration execution continues.
+        pass
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -48,6 +75,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        _ensure_alembic_version_column_capacity(connection)
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
