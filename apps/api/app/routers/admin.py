@@ -131,10 +131,13 @@ async def create_company(
 
 @router.get("/companies")
 async def list_companies(
-    _: Annotated[User, SuperAdmin],
+    current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    result = await db.execute(select(Company).order_by(Company.created_at.desc()))
+    query = select(Company).order_by(Company.created_at.desc())
+    if current_user.role == UserRole.business_owner:
+        query = query.where(Company.id == current_user.company_id)
+    result = await db.execute(query)
     return result.scalars().all()
 
 
