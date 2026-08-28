@@ -388,7 +388,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       >
         {copy.inquiry}
       </button>
-      {showForm && !preview && <LeadForm profileId={profile.id} lang={lang} />}
+      {showForm && !preview && <LeadForm profileId={profile.id} tagToken={tagToken} lang={lang} />}
     </div>
   );
 

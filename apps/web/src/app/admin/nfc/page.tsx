@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { listNfcInventory, updateNfcCardNumber } from "@/lib/api";
 
 type NfcTag = {
   id: string;
   tag_uid: string | null;
+  card_number: string | null;
   tag_type: string | null;
   capacity_bytes: number | null;
   status: string;
@@ -20,6 +21,8 @@ type NfcTag = {
 
 export default function NfcInventoryPage() {
   const [tags, setTags] = useState<NfcTag[]>([]);
+  const [cardNumbers, setCardNumbers] = useState<Record<string, string>>({});
+  const [savingTagId, setSavingTagId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,9 +30,12 @@ export default function NfcInventoryPage() {
 
     const load = async () => {
       try {
-        const data = await apiGet<NfcTag[]>("/api/v1/nfc/inventory");
+        const data = await listNfcInventory<NfcTag[]>();
         if (mounted) {
           setTags(data);
+          setCardNumbers(
+            Object.fromEntries(data.map((tag) => [tag.id, tag.card_number ?? ""]))
+          );
           setError(null);
         }
       } catch (e) {
@@ -62,6 +68,22 @@ export default function NfcInventoryPage() {
     return d.toLocaleString();
   };
 
+  const saveCardNumber = async (tag: NfcTag) => {
+    setSavingTagId(tag.id);
+    setError(null);
+    try {
+      const value = cardNumbers[tag.id] ?? "";
+      const updated = await updateNfcCardNumber(tag.id, value);
+      setTags((prev) =>
+        prev.map((t) => (t.id === tag.id ? { ...t, card_number: updated.card_number } : t))
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save card number.");
+    } finally {
+      setSavingTagId(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -88,7 +110,7 @@ export default function NfcInventoryPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
-              {["Tag UID", "Type", "Profile", "Status", "Written By", "Written At"].map((h) => (
+              {["Card #", "Tag UID", "Type", "Profile", "Status", "Written By", "Written At"].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium">
                   {h}
                 </th>
@@ -98,13 +120,33 @@ export default function NfcInventoryPage() {
           <tbody>
             {tags.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   No tags programmed yet. Use the MDM TapCard mobile app to write your first tag.
                 </td>
               </tr>
             ) : (
-              {tags.map((tag) => (
+              tags.map((tag) => (
                 <tr key={tag.id} className="border-t border-slate-100">
+                  <td className="px-4 py-3 text-slate-700">
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={cardNumbers[tag.id] ?? ""}
+                        onChange={(e) =>
+                          setCardNumbers((prev) => ({ ...prev, [tag.id]: e.target.value }))
+                        }
+                        placeholder="e.g. C-001"
+                        className="w-28 rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveCardNumber(tag)}
+                        disabled={savingTagId === tag.id}
+                        className="rounded bg-slate-800 px-2 py-1 text-[11px] text-white disabled:opacity-50"
+                      >
+                        {savingTagId === tag.id ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-slate-700">{tag.tag_uid ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-700">
                     <div>{tag.tag_type ?? "—"}</div>

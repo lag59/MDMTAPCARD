@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import TemplatePreview from "./TemplatePreview";
 import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
 import { uploadLogo } from "@/lib/api";
@@ -34,7 +34,7 @@ interface Props {
 }
 
 export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
-  const [values, setValues] = useState<CardFormValues>({
+  const normalizedInitial: CardFormValues = {
     display_name: initial?.display_name ?? "",
     title: initial?.title ?? "",
     photo_url: initial?.photo_url ?? "",
@@ -52,34 +52,16 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
     payment_label: initial?.payment_label ?? "",
     is_active: initial?.is_active ?? true,
     social_links: initial?.social_links ?? [],
+  };
+
+  const [values, setValues] = useState<CardFormValues>({
+    ...normalizedInitial,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const customFileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setValues({
-      display_name: initial?.display_name ?? "",
-      title: initial?.title ?? "",
-      photo_url: initial?.photo_url ?? "",
-      phone: initial?.phone ?? "",
-      email: initial?.email ?? "",
-      website: initial?.website ?? "",
-      address: initial?.address ?? "",
-      biography: initial?.biography ?? "",
-      whatsapp_number: initial?.whatsapp_number ?? "",
-      language: initial?.language ?? "en",
-      theme_id: initial?.theme_id ?? "dark",
-      custom_theme: initial?.custom_theme ?? "",
-      booking_url: initial?.booking_url ?? "",
-      payment_url: initial?.payment_url ?? "",
-      payment_label: initial?.payment_label ?? "",
-      is_active: initial?.is_active ?? true,
-      social_links: initial?.social_links ?? [],
-    });
-  }, [initial]);
 
   const set =
     (key: keyof CardFormValues) =>
@@ -139,6 +121,13 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
     setError(null);
     setSuccess(false);
     try {
+      const normalizedSocialLinks = values.social_links
+        .map((link) => ({
+          platform: (link.platform ?? "").trim().toLowerCase(),
+          url: (link.url ?? "").trim(),
+        }))
+        .filter((link) => link.platform.length > 0 && link.url.length > 0);
+
       // Convert empty strings to null for optional fields
       await onSubmit({
         ...values,
@@ -150,6 +139,7 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
         address: values.address || "",
         biography: values.biography || "",
         whatsapp_number: values.whatsapp_number || "",
+        social_links: normalizedSocialLinks,
       });
       setSuccess(true);
     } catch (err) {

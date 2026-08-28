@@ -27,7 +27,7 @@ export default function TemplatesGalleryPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [customError, setCustomError] = useState<string | null>(null);
 
-  const useTemplate = (id: string) => {
+  const selectTemplate = (id: string) => {
     router.push(`/admin/cards/new?template=${encodeURIComponent(id)}`);
   };
 
@@ -113,7 +113,7 @@ export default function TemplatesGalleryPage() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">{category}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {items.map((t) => (
-                <TemplateCard key={t.id} template={t} onUse={() => useTemplate(t.id)} />
+                <TemplateCard key={t.id} template={t} onUse={() => selectTemplate(t.id)} />
               ))}
             </div>
           </section>

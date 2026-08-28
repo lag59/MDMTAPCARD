@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api";
+import { grantComplimentaryNfc, listAdminCompanies } from "@/lib/api";
 
 type Company = {
   id: string;
@@ -25,7 +25,7 @@ export default function ClientsPage() {
 
     const load = async () => {
       try {
-        const data = await apiGet<Company[]>("/api/v1/admin/companies");
+        const data = await listAdminCompanies<Company[]>();
         if (mounted) {
           setCompanies(data);
           setError(null);
@@ -60,8 +60,8 @@ export default function ClientsPage() {
     setSuccess(null);
 
     try {
-      await apiPost(`/api/v1/admin/companies/${company.id}/complimentary-nfc`, { quantity: 1 });
-      const data = await apiGet<Company[]>("/api/v1/admin/companies");
+      await grantComplimentaryNfc(company.id, 1);
+      const data = await listAdminCompanies<Company[]>();
       setCompanies(data);
       setSuccess(`Added a complimentary NFC card for ${company.name} (valid for 1 year).`);
     } catch (e) {

@@ -99,3 +99,15 @@ def test_grant_complimentary_nfc_missing_company_returns_404(client: httpx.Clien
 
     assert response.status_code == 404
     assert response.json().get("detail") == "Company not found"
+
+
+def test_square_checkout_endpoint_exists_for_unknown_order(client: httpx.Client, admin_token: str) -> None:
+    random_order_id = str(uuid.uuid4())
+    response = client.post(
+        f"/api/v1/admin/orders/{random_order_id}/square-checkout",
+        headers=_auth_headers(admin_token),
+        json={},
+    )
+
+    assert response.status_code == 404
+    assert response.json().get("detail") == "Order not found"

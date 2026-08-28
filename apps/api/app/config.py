@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # Profile base URL written to NFC tags
     PROFILE_BASE_URL: str = "https://tap.mdmcreation.com"
 
+    # Square payments
+    SQUARE_ACCESS_TOKEN: str = ""
+    SQUARE_LOCATION_ID: str = ""
+    SQUARE_ENVIRONMENT: str = "sandbox"  # sandbox | production
+    SQUARE_API_BASE_URL: str = ""
+    SQUARE_CHECKOUT_REDIRECT_URL: str = ""
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def _parse_allowed_origins(cls, v):

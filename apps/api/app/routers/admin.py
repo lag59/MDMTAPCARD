@@ -4,9 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.deps import get_db, CurrentUser, require_roles
 from app.core.security import hash_password
 from app.models.company import Company, SubscriptionPlan
@@ -69,12 +71,27 @@ class OrderUpdate(BaseModel):
     notes: str | None = None
 
 
+class SquareCheckoutResponse(BaseModel):
+    order_id: str
+    checkout_url: str
+    payment_link_id: str
+
+
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
     return plan in {
         SubscriptionPlan.tap_business,
         SubscriptionPlan.tap_team,
         SubscriptionPlan.tap_pro,
     }
+
+
+def _square_base_url() -> str:
+    if settings.SQUARE_API_BASE_URL:
+        return settings.SQUARE_API_BASE_URL.rstrip("/")
+    env = (settings.SQUARE_ENVIRONMENT or "sandbox").strip().lower()
+    if env == "production":
+        return "https://connect.squareup.com"
+    return "https://connect.squareupsandbox.com"
 
 
 @router.get("/dashboard")
@@ -239,6 +256,60 @@ async def list_profiles(
             "tap_count": row.tap_count,
             "lead_count": row.lead_count,
             "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+
+@router.get("/leads")
+async def list_leads(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, str | bool | None]]:
+    query = (
+        select(
+            Lead.id,
+            Lead.created_at,
+            Lead.name,
+            Lead.email,
+            Lead.phone,
+            Lead.source,
+            Lead.tag_token,
+            Lead.consent_to_contact,
+            Lead.consent_text,
+            Lead.consent_captured_at,
+            Profile.display_name.label("profile_name"),
+            Profile.slug.label("profile_slug"),
+            NfcTag.card_number.label("card_number"),
+            Company.name.label("company_name"),
+        )
+        .join(Profile, Profile.id == Lead.profile_id)
+        .join(Company, Company.id == Profile.company_id)
+        .outerjoin(NfcTag, NfcTag.id == Lead.tag_id)
+        .order_by(Lead.created_at.desc())
+        .limit(500)
+    )
+
+    if current_user.role != UserRole.super_admin and current_user.company_id:
+        query = query.where(Profile.company_id == current_user.company_id)
+
+    rows = (await db.execute(query)).all()
+    return [
+        {
+            "id": str(row.id),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "name": row.name,
+            "email": row.email,
+            "phone": row.phone,
+            "source": row.source,
+            "tag_token": row.tag_token,
+            "card_number": row.card_number,
+            "profile_name": row.profile_name,
+            "profile_slug": row.profile_slug,
+            "company_name": row.company_name,
+            "consent_to_contact": bool(row.consent_to_contact),
+            "consent_text": row.consent_text,
+            "consent_captured_at": row.consent_captured_at.isoformat() if row.consent_captured_at else None,
         }
         for row in rows
     ]
@@ -413,6 +484,83 @@ async def update_order(
         "period_end": order.period_end.isoformat() if order.period_end else None,
         "created_at": order.created_at.isoformat() if order.created_at else None,
     }
+
+
+@router.post("/orders/{order_id}/square-checkout", response_model=SquareCheckoutResponse)
+async def create_square_checkout_link(
+    order_id: uuid.UUID,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SquareCheckoutResponse:
+    order = await db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if current_user.role == UserRole.business_owner and current_user.company_id != order.company_id:
+        raise HTTPException(status_code=403, detail="Cannot create checkout links for another company")
+
+    if not settings.SQUARE_ACCESS_TOKEN or not settings.SQUARE_LOCATION_ID:
+        raise HTTPException(
+            status_code=400,
+            detail="Square is not configured. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID.",
+        )
+
+    company = await db.get(Company, order.company_id)
+    item_name = f"{company.name if company else 'MDM TapCard'} • {order.reference_code}"
+
+    payload: dict[str, object] = {
+        "idempotency_key": str(uuid.uuid4()),
+        "quick_pay": {
+            "name": item_name,
+            "price_money": {
+                "amount": order.amount_cents,
+                "currency": order.currency.upper(),
+            },
+            "location_id": settings.SQUARE_LOCATION_ID,
+        },
+    }
+
+    if settings.SQUARE_CHECKOUT_REDIRECT_URL:
+        payload["checkout_options"] = {
+            "redirect_url": settings.SQUARE_CHECKOUT_REDIRECT_URL,
+        }
+
+    url = f"{_square_base_url()}/v2/online-checkout/payment-links"
+    headers = {
+        "Authorization": f"Bearer {settings.SQUARE_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+        "Square-Version": "2026-08-01",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        detail = "Square checkout request failed"
+        try:
+            body = exc.response.json()
+            errors = body.get("errors") if isinstance(body, dict) else None
+            if errors and isinstance(errors, list):
+                first = errors[0]
+                if isinstance(first, dict) and first.get("detail"):
+                    detail = str(first["detail"])
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Could not reach Square API") from exc
+
+    body = response.json()
+    payment_link = body.get("payment_link") if isinstance(body, dict) else None
+    if not isinstance(payment_link, dict) or not payment_link.get("url") or not payment_link.get("id"):
+        raise HTTPException(status_code=502, detail="Invalid Square API response")
+
+    return SquareCheckoutResponse(
+        order_id=str(order.id),
+        checkout_url=str(payment_link["url"]),
+        payment_link_id=str(payment_link["id"]),
+    )
 
 
 @router.post("/users", status_code=201)

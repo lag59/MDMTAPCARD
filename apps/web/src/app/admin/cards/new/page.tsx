@@ -18,7 +18,18 @@ export default function NewCardPage() {
   const [importSlug, setImportSlug] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
   const [importJsonError, setImportJsonError] = useState<string | null>(null);
-  const [importInitial, setImportInitial] = useState<Partial<CardFormValues>>({});
+  const [importInitial, setImportInitial] = useState<Partial<CardFormValues>>(() => {
+    if (typeof window === "undefined") return {};
+    const template = new URLSearchParams(window.location.search).get("template");
+    if (!template) return {};
+    if (template === "custom") {
+      const raw = window.sessionStorage.getItem("pending_custom_theme");
+      if (!raw) return {};
+      window.sessionStorage.removeItem("pending_custom_theme");
+      return { theme_id: "custom", custom_theme: raw };
+    }
+    return { theme_id: template };
+  });
 
   useEffect(() => {
     apiGet<Me>("/api/v1/admin/me").then((data) => {
@@ -32,20 +43,6 @@ export default function NewCardPage() {
         setSelectedCompanyId(data.company_id);
       }
     });
-  }, []);
-
-  useEffect(() => {
-    const template = new URLSearchParams(window.location.search).get("template");
-    if (!template) return;
-    if (template === "custom") {
-      const raw = window.sessionStorage.getItem("pending_custom_theme");
-      if (raw) {
-        setImportInitial((prev) => ({ ...prev, theme_id: "custom", custom_theme: raw }));
-        window.sessionStorage.removeItem("pending_custom_theme");
-      }
-    } else {
-      setImportInitial((prev) => ({ ...prev, theme_id: template }));
-    }
   }, []);
 
   const handleSubmit = async (values: CardFormValues) => {

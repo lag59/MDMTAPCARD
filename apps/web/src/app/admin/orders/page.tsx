@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { apiGet, apiPatch, apiPost } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, createSquareCheckout } from "@/lib/api";
 
 type OrderItem = {
   id: string;
@@ -35,6 +35,12 @@ type Company = {
   name: string;
 };
 
+type SquareCheckoutResponse = {
+  order_id: string;
+  checkout_url: string;
+  payment_link_id: string;
+};
+
 type OrderEditState = Record<
   string,
   {
@@ -58,6 +64,7 @@ export default function OrdersPage() {
   const [orderEdits, setOrderEdits] = useState<OrderEditState>({});
   const [submittingCreate, setSubmittingCreate] = useState(false);
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -280,6 +287,21 @@ export default function OrdersPage() {
       setError(e instanceof Error ? e.message : "Could not update order.");
     } finally {
       setSavingOrderId(null);
+    }
+  };
+
+  const createSquarePayLink = async (order: OrderItem) => {
+    setPayingOrderId(order.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const data = await createSquareCheckout<SquareCheckoutResponse>(order.id);
+      window.open(data.checkout_url, "_blank", "noopener,noreferrer");
+      setSuccess(`Square checkout link created for ${order.reference_code}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create Square checkout link.");
+    } finally {
+      setPayingOrderId(null);
     }
   };
 
@@ -537,13 +559,22 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatDate(order.created_at, true)}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => saveOrderUpdate(order)}
-                      disabled={savingOrderId === order.id}
-                      className="bg-slate-800 text-white rounded px-2.5 py-1 text-xs disabled:opacity-60"
-                    >
-                      {savingOrderId === order.id ? "Saving..." : "Save"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => saveOrderUpdate(order)}
+                        disabled={savingOrderId === order.id || payingOrderId === order.id}
+                        className="bg-slate-800 text-white rounded px-2.5 py-1 text-xs disabled:opacity-60"
+                      >
+                        {savingOrderId === order.id ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => createSquarePayLink(order)}
+                        disabled={payingOrderId === order.id || savingOrderId === order.id}
+                        className="bg-emerald-600 text-white rounded px-2.5 py-1 text-xs disabled:opacity-60"
+                      >
+                        {payingOrderId === order.id ? "Creating..." : "Square Pay Link"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

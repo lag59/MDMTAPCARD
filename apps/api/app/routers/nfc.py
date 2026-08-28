@@ -62,9 +62,19 @@ class TagLockRequest(BaseModel):
     tag_id: uuid.UUID
 
 
+class TagUpdateRequest(BaseModel):
+    card_number: str | None = None
+
+
+class TagUpdateResponse(BaseModel):
+    tag_id: uuid.UUID
+    card_number: str | None = None
+
+
 class InventoryTagRow(BaseModel):
     id: uuid.UUID
     tag_uid: str | None = None
+    card_number: str | None = None
     tag_type: str | None = None
     capacity_bytes: int | None = None
     status: str
@@ -195,6 +205,41 @@ async def lock_tag(
     return {"message": "Tag marked as locked in the database. Ensure the physical lock was applied on device."}
 
 
+@router.patch("/{tag_id}", response_model=TagUpdateResponse)
+async def update_tag(
+    tag_id: uuid.UUID,
+    body: TagUpdateRequest,
+    current_user: WriterUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    tag = await db.get(NfcTag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    enforce_company_ownership(current_user, tag.company_id)
+
+    normalized_card_number = (body.card_number or "").strip() or None
+    if normalized_card_number and len(normalized_card_number) > 40:
+        raise HTTPException(status_code=400, detail="card_number must be 40 characters or less")
+
+    if normalized_card_number:
+        exists = (
+            await db.execute(
+                select(NfcTag).where(
+                    NfcTag.company_id == tag.company_id,
+                    NfcTag.card_number == normalized_card_number,
+                    NfcTag.id != tag.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if exists:
+            raise HTTPException(status_code=409, detail="card_number already exists in this company")
+
+    tag.card_number = normalized_card_number
+    await db.commit()
+    await db.refresh(tag)
+    return TagUpdateResponse(tag_id=tag.id, card_number=tag.card_number)
+
+
 @router.get("/inventory")
 async def list_inventory(
     current_user: InventoryUser,
@@ -224,6 +269,7 @@ async def list_inventory(
             InventoryTagRow(
                 id=tag.id,
                 tag_uid=tag.tag_uid,
+                card_number=tag.card_number,
                 tag_type=tag.tag_type,
                 capacity_bytes=tag.capacity_bytes,
                 status=tag.status.value if isinstance(tag.status, NfcTagStatus) else str(tag.status),

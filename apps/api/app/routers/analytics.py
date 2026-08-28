@@ -9,7 +9,8 @@ from slowapi.util import get_remote_address
 
 from app.core.deps import get_db
 from app.models.events import TapEvent
-from app.models.nfc_tag import NfcTag
+from app.models.nfc_tag import NfcTag, NfcTagStatus
+from app.models.profile import Profile
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -30,15 +31,27 @@ async def track_event(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     tag_id = None
+    event_profile_id = body.profile_id
     if body.tag_token:
         from sqlalchemy import select
         result = await db.execute(select(NfcTag).where(NfcTag.tag_token == body.tag_token))
         tag = result.scalar_one_or_none()
         if tag:
             tag_id = tag.id
+            if tag.profile_id is None:
+                profile = await db.get(Profile, body.profile_id)
+                if profile:
+                    tag.profile_id = profile.id
+                    if not tag.company_id:
+                        tag.company_id = profile.company_id
+                    if tag.status in {NfcTagStatus.inventory, NfcTagStatus.written, NfcTagStatus.verified}:
+                        tag.status = NfcTagStatus.activated
+            else:
+                # Keep analytics consistent with the tag's bound profile.
+                event_profile_id = tag.profile_id
 
     event = TapEvent(
-        profile_id=body.profile_id,
+        profile_id=event_profile_id,
         tag_id=tag_id,
         event_type=body.event_type,
         device_type=body.device_type,

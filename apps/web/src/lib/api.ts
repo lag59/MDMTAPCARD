@@ -56,6 +56,31 @@ export async function apiDelete(path: string): Promise<void> {
   return apiRequest<void>(path, "DELETE");
 }
 
+// ── Admin gateway helpers ───────────────────────────────────────────────────
+
+export async function listAdminCompanies<T = unknown[]>(): Promise<T> {
+  return apiGet<T>("/api/v1/admin/companies");
+}
+
+export async function grantComplimentaryNfc(companyId: string, quantity = 1): Promise<void> {
+  await apiPost(`/api/v1/admin/companies/${companyId}/complimentary-nfc`, { quantity });
+}
+
+export async function listNfcInventory<T = unknown[]>(): Promise<T> {
+  return apiGet<T>("/api/v1/nfc/inventory");
+}
+
+export async function updateNfcCardNumber<T = { tag_id: string; card_number: string | null }>(
+  tagId: string,
+  cardNumber: string
+): Promise<T> {
+  return apiPatch<T>(`/api/v1/nfc/${tagId}`, { card_number: cardNumber });
+}
+
+export async function createSquareCheckout<T = { checkout_url: string }>(orderId: string): Promise<T> {
+  return apiPost<T>(`/api/v1/admin/orders/${orderId}/square-checkout`, {});
+}
+
 export async function fetchProfile(slug: string) {
   const res = await fetch(`${BASE_URL}/api/v1/profiles/${slug}`, {
     cache: "no-store",
@@ -107,10 +132,13 @@ export async function trackEvent(payload: {
 
 export async function submitLead(payload: {
   profile_id: string;
+  tag_token?: string;
   name: string;
   email?: string;
   phone?: string;
   message?: string;
+  consent_to_contact: boolean;
+  consent_text?: string;
 }) {
   const res = await fetch(`${BASE_URL}/api/v1/leads/`, {
     method: "POST",

@@ -28,6 +28,7 @@ class NfcTag(Base):
     company_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("companies.id"), nullable=True)
     profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=True)
     tag_uid: Mapped[str | None] = mapped_column(String(100), nullable=True)  # hardware serial
+    card_number: Mapped[str | None] = mapped_column(String(40), nullable=True)  # admin-visible label/number
     tag_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # NTAG213 / NTAG215 / NTAG216
     capacity_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     written_url: Mapped[str | None] = mapped_column(Text, nullable=True)
