@@ -2,7 +2,6 @@
 
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiBaseUrl } from "@/lib/api";
 
 export default function LoginPage() {
   return (
@@ -28,7 +27,7 @@ function LoginForm() {
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+      const response = await fetch(`/api/proxy/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

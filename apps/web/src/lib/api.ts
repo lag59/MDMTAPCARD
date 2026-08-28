@@ -1,4 +1,5 @@
 const PROD_API_FALLBACK = "https://mdm-tapcard-api.fly.dev";
+const PROXY_PREFIX = "/api/proxy";
 
 function normalizeBaseUrl(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
@@ -24,6 +25,10 @@ const BASE_URL = resolveApiBaseUrl();
 
 export const apiBaseUrl = BASE_URL;
 
+function proxied(path: string): string {
+  return `${PROXY_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 type ApiMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): Promise<T> {
@@ -34,7 +39,7 @@ async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): P
 
   let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(proxied(path), {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -44,7 +49,7 @@ async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): P
       cache: "no-store",
     });
   } catch {
-    throw new Error(`Network error reaching API at ${BASE_URL}. Verify frontend env vars, CORS, and backend health.`);
+    throw new Error(`Network error reaching API via ${PROXY_PREFIX}. Verify frontend deploy and backend health.`);
   }
 
   if (!response.ok) {
@@ -113,7 +118,7 @@ export async function getAdminSystemStatus<T = { api_version: string; db_ok: boo
 }
 
 export async function fetchProfile(slug: string) {
-  const res = await fetch(`${BASE_URL}/api/v1/profiles/${slug}`, {
+  const res = await fetch(proxied(`/api/v1/profiles/${slug}`), {
     cache: "no-store",
   });
   if (!res.ok) return null;
@@ -127,7 +132,7 @@ export async function uploadLogo(file: File): Promise<string> {
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${BASE_URL}/api/v1/profiles/upload-logo`, {
+  const res = await fetch(proxied("/api/v1/profiles/upload-logo"), {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
@@ -154,7 +159,7 @@ export async function trackEvent(payload: {
   event_type: string;
   device_type?: string;
 }) {
-  await fetch(`${BASE_URL}/api/v1/analytics/track`, {
+  await fetch(proxied("/api/v1/analytics/track"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -172,7 +177,7 @@ export async function submitLead(payload: {
   consent_text?: string;
   phone_verification_id?: string;
 }) {
-  const res = await fetch(`${BASE_URL}/api/v1/leads/`, {
+  const res = await fetch(proxied("/api/v1/leads/"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -185,7 +190,7 @@ export async function startLeadPhoneOtp(payload: {
   tag_token?: string;
   phone: string;
 }): Promise<{ verification_id: string; expires_at: string; provider: string; debug_code?: string | null }> {
-  const res = await fetch(`${BASE_URL}/api/v1/leads/otp/start`, {
+  const res = await fetch(proxied("/api/v1/leads/otp/start"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -207,7 +212,7 @@ export async function verifyLeadPhoneOtp(payload: {
   verification_id: string;
   code: string;
 }): Promise<{ verified: boolean }> {
-  const res = await fetch(`${BASE_URL}/api/v1/leads/otp/verify`, {
+  const res = await fetch(proxied("/api/v1/leads/otp/verify"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
