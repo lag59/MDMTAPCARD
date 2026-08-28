@@ -18,20 +18,23 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("nfc_tags", sa.Column("disabled_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("nfc_tags", sa.Column("replaced_at", sa.DateTime(timezone=True), nullable=True))
+    op.execute("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL")
+    op.execute("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS replaced_at TIMESTAMPTZ NULL")
 
-    op.create_table(
-        "nfc_audit_events",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
-        sa.Column("company_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("companies.id"), nullable=True),
-        sa.Column("profile_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("profiles.id"), nullable=True),
-        sa.Column("tag_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("nfc_tags.id"), nullable=True),
-        sa.Column("actor_user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("action", sa.String(length=64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nfc_audit_events (
+            id UUID PRIMARY KEY,
+            company_id UUID NULL REFERENCES companies(id),
+            profile_id UUID NULL REFERENCES profiles(id),
+            tag_id UUID NULL REFERENCES nfc_tags(id),
+            actor_user_id UUID NULL REFERENCES users(id),
+            action VARCHAR(64) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+        """
     )
-    op.create_index("ix_nfc_audit_events_created_at", "nfc_audit_events", ["created_at"], unique=False)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_nfc_audit_events_created_at ON nfc_audit_events(created_at)")
 
 
 def downgrade() -> None:

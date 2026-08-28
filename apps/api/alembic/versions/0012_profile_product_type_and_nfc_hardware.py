@@ -17,10 +17,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("profiles", sa.Column("card_type", sa.String(length=30), nullable=False, server_default="digital_only"))
-    op.add_column("profiles", sa.Column("fulfillment_status", sa.String(length=40), nullable=False, server_default="not_required"))
-    op.add_column("nfc_tags", sa.Column("public_url", sa.Text(), nullable=True))
-    op.add_column("nfc_tags", sa.Column("hardware_type", sa.String(length=20), nullable=False, server_default="card"))
+    op.execute("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS card_type VARCHAR(30) NOT NULL DEFAULT 'digital_only'")
+    op.execute("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(40) NOT NULL DEFAULT 'not_required'")
+    op.execute("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS public_url TEXT NULL")
+    op.execute("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS hardware_type VARCHAR(20) NOT NULL DEFAULT 'card'")
 
     op.execute("UPDATE profiles SET fulfillment_status = 'awaiting_programming' WHERE card_type IN ('nfc_card','nfc_button')")
 
