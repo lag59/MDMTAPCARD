@@ -16,11 +16,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.get_context().autocommit_block():
-        op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'basic_monthly'")
-        op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'basic_yearly'")
-        op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'pro_monthly'")
-        op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'pro_yearly'")
+    op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'basic_monthly'")
+    op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'basic_yearly'")
+    op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'pro_monthly'")
+    op.execute("ALTER TYPE subscriptionplan ADD VALUE IF NOT EXISTS 'pro_yearly'")
 
 
 def downgrade() -> None:

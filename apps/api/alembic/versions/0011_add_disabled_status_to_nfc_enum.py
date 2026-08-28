@@ -17,8 +17,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.get_context().autocommit_block():
-        op.execute("ALTER TYPE nfctagstatus ADD VALUE IF NOT EXISTS 'disabled'")
+    op.execute("ALTER TYPE nfctagstatus ADD VALUE IF NOT EXISTS 'disabled'")
 
 
 def downgrade() -> None:
