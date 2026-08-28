@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Deployment marker: forces a fresh web build so /api/proxy route is present in production.
 const PROD_API_FALLBACK = "https://mdm-tapcard-api.fly.dev";
 
 function normalizeBaseUrl(url: string): string {
