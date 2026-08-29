@@ -67,6 +67,30 @@ flutter run --dart-define=API_URL=http://10.0.2.2:8000
 7. Confirm write to API (stores UID/type/capacity/programmer)
 8. Optionally lock as read-only with irreversible warning
 
+### NFC writer options (you can do both)
+
+- **Mobile writer (existing):** Use the Flutter admin app in `apps/mobile` to prepare, write, read-back verify, and confirm in one flow.
+- **Desktop ACR122U-assisted writer (new):** Use your ACS ACR122U-A9 software for the physical write/read step while this repo's API remains source-of-truth for prepare/confirm.
+
+Desktop-assisted flow script:
+
+```bash
+python scripts/nfc_desktop_assist.py --profile-id <PROFILE_UUID>
+```
+
+What it does:
+
+1. Authenticates to API
+2. Calls prepare endpoint to reserve a tag and get `profile_url`
+3. Prompts you to write/read that URL using ACR122U tooling
+4. Calls confirm endpoint with your read-back value (and optional UID/type/capacity)
+
+Confirm-only mode (if you already prepared/wrote a tag):
+
+```bash
+python scripts/nfc_desktop_assist.py --confirm-only --tag-id <TAG_UUID>
+```
+
 ## Security principles
 
 - Write only HTTPS short URLs to the NFC tag

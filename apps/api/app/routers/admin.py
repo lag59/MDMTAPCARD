@@ -163,6 +163,30 @@ async def schema_repair(
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT NULL"))
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_cards INTEGER NOT NULL DEFAULT 0"))
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_expires_at TIMESTAMPTZ NULL"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_to_contact BOOLEAN NOT NULL DEFAULT FALSE"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_text VARCHAR(255) NULL"))
+    await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_captured_at TIMESTAMPTZ NULL"))
+    await db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS lead_phone_verifications (
+              id UUID PRIMARY KEY,
+              profile_id UUID NOT NULL REFERENCES profiles(id),
+              tag_token VARCHAR(32) NULL,
+              phone VARCHAR(50) NOT NULL,
+              code_hash VARCHAR(255) NOT NULL,
+              attempts INTEGER NOT NULL DEFAULT 0,
+              expires_at TIMESTAMPTZ NOT NULL,
+              verified_at TIMESTAMPTZ NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+    )
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_phone_verifications_phone ON lead_phone_verifications(phone)"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS public_url TEXT NULL"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS hardware_type VARCHAR(20) NOT NULL DEFAULT 'card'"))
     await db.execute(text("ALTER TABLE nfc_tags ADD COLUMN IF NOT EXISTS card_number VARCHAR(40) NULL"))
