@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { submitSignupRequest } from "@/lib/api";
 
 const primaryPlans = [
@@ -51,6 +52,10 @@ const legacyPlans = [
 ] as const;
 
 export default function Home() {
+  const router = useRouter();
+  const formFieldClass =
+    "mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200";
+
   const [form, setForm] = useState({
     company_name: "",
     contact_name: "",
@@ -105,8 +110,9 @@ export default function Home() {
         team_size: form.team_size || undefined,
         notes: form.notes || undefined,
       });
-      setSuccess(result.message);
-      setForm((prev) => ({ ...prev, notes: "" }));
+      const requestId = encodeURIComponent(result.request_id);
+      const companyName = encodeURIComponent(form.company_name);
+      router.push(`/signup/thanks?request_id=${requestId}&company=${companyName}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit signup request.");
     } finally {
@@ -230,68 +236,75 @@ export default function Home() {
         </section>
 
         <section id="signup" className="mt-16 md:mt-20">
-          <div className="rounded-2xl border border-cyan-400/40 bg-cyan-400/10 p-6">
-            <h3 className="text-2xl font-bold text-cyan-100">Sign up for TapCard</h3>
-            <p className="mt-2 max-w-2xl text-sm text-cyan-50/90">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl md:p-8">
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900">Sign up for TapCard</h3>
+                <p className="mt-2 max-w-2xl text-sm text-slate-600">
               New customers can start by requesting onboarding. If you already have credentials, sign in directly to your admin dashboard.
-            </p>
+                </p>
+              </div>
+              <span className="hidden md:inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                Response in 1 business day
+              </span>
+            </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
                 href="/login"
-                className="rounded-lg border border-cyan-300/40 px-5 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/15"
+                className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
                 I already have an account
               </Link>
             </div>
 
             <form onSubmit={onSubmit} className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Company name *
                 <input
                   required
                   value={form.company_name}
                   onChange={(e) => setForm((prev) => ({ ...prev, company_name: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                   placeholder="Acme Corp"
                 />
               </label>
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Contact name *
                 <input
                   required
                   value={form.contact_name}
                   onChange={(e) => setForm((prev) => ({ ...prev, contact_name: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                   placeholder="Jane Doe"
                 />
               </label>
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Email *
                 <input
                   required
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                   placeholder="you@company.com"
                 />
               </label>
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Phone
                 <input
                   value={form.phone}
                   onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                   placeholder="+1 555 123 4567"
                 />
               </label>
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Plan interest
                 <select
                   value={form.plan_interest}
                   onChange={(e) => setForm((prev) => ({ ...prev, plan_interest: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                 >
                   <option value="basic_monthly">Basic Monthly ($3.99)</option>
                   <option value="basic_yearly">Basic Yearly ($39)</option>
@@ -303,21 +316,21 @@ export default function Home() {
                   <option value="tap_pro">Tap Pro (Legacy)</option>
                 </select>
               </label>
-              <label className="text-sm text-cyan-50/90">
+              <label className="text-sm font-medium text-slate-700">
                 Team size
                 <input
                   value={form.team_size}
                   onChange={(e) => setForm((prev) => ({ ...prev, team_size: e.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={formFieldClass}
                   placeholder="e.g. 5"
                 />
               </label>
-              <label className="text-sm text-cyan-50/90 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700 md:col-span-2">
                 Notes
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  className="mt-1 h-24 w-full rounded-lg border border-cyan-200/30 bg-slate-950/40 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-400/50"
+                  className={`${formFieldClass} h-24`}
                   placeholder="Tell us about your rollout timeline or NFC volume goals."
                 />
               </label>
@@ -325,12 +338,12 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+                  className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-60"
                 >
                   {submitting ? "Submitting..." : "Submit signup request"}
                 </button>
-                {success ? <p className="text-sm text-emerald-200">{success}</p> : null}
-                {error ? <p className="text-sm text-rose-200">{error}</p> : null}
+                {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
+                {error ? <p className="text-sm text-rose-700">{error}</p> : null}
               </div>
             </form>
           </div>
