@@ -6,8 +6,6 @@ Create Date: 2026-08-28 19:15:00
 
 """
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -18,15 +16,23 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("leads", sa.Column("tag_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.add_column("leads", sa.Column("tag_token", sa.String(length=32), nullable=True))
-    op.add_column("leads", sa.Column("source", sa.String(length=30), nullable=True))
-    op.create_foreign_key(
-        "fk_leads_tag_id_nfc_tags",
-        "leads",
-        "nfc_tags",
-        ["tag_id"],
-        ["id"],
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL")
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL")
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL")
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'fk_leads_tag_id_nfc_tags'
+            ) THEN
+                ALTER TABLE leads
+                ADD CONSTRAINT fk_leads_tag_id_nfc_tags
+                FOREIGN KEY (tag_id) REFERENCES nfc_tags(id);
+            END IF;
+        END $$;
+        """
     )
 
 

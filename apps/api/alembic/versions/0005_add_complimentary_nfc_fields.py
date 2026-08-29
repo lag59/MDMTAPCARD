@@ -6,7 +6,6 @@ Create Date: 2026-08-28 12:00:00
 
 """
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
@@ -17,8 +16,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("companies", sa.Column("complimentary_nfc_cards", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("companies", sa.Column("complimentary_nfc_expires_at", sa.DateTime(timezone=True), nullable=True))
+    op.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_cards INTEGER NOT NULL DEFAULT 0")
+    op.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_expires_at TIMESTAMPTZ NULL")
 
 
 def downgrade() -> None:

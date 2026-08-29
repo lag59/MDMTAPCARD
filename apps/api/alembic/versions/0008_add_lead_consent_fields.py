@@ -17,9 +17,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("leads", sa.Column("consent_to_contact", sa.Boolean(), nullable=False, server_default=sa.false()))
-    op.add_column("leads", sa.Column("consent_text", sa.String(length=255), nullable=True))
-    op.add_column("leads", sa.Column("consent_captured_at", sa.DateTime(timezone=True), nullable=True))
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_to_contact BOOLEAN NOT NULL DEFAULT FALSE")
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_text VARCHAR(255) NULL")
+    op.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_captured_at TIMESTAMPTZ NULL")
     op.alter_column("leads", "consent_to_contact", server_default=None)
 
 
