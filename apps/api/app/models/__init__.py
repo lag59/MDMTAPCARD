@@ -4,6 +4,7 @@ from app.models.profile import Profile, SocialLink
 from app.models.nfc_tag import NfcTag, NfcTagStatus
 from app.models.events import TapEvent, Lead, LeadPhoneVerification, NfcAuditEvent
 from app.models.order import Order, OrderStatus, PaymentStatus
+from app.models.signup_request import SignupRequest
 
 __all__ = [
     "User", "UserRole",
@@ -12,4 +13,5 @@ __all__ = [
     "NfcTag", "NfcTagStatus",
     "TapEvent", "Lead", "LeadPhoneVerification", "NfcAuditEvent",
     "Order", "OrderStatus", "PaymentStatus",
+    "SignupRequest",
 ]

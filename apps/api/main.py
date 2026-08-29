@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.database import engine
-from app.routers import auth, profiles, nfc, analytics, leads, admin
+from app.routers import auth, profiles, nfc, analytics, leads, admin, public
 from sqlalchemy import text
 
 limiter = Limiter(key_func=get_remote_address)
@@ -41,6 +41,7 @@ app.include_router(nfc.public_router, tags=["nfc-public"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(leads.router, prefix="/api/v1/leads", tags=["leads"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(public.router, prefix="/api/v1/public", tags=["public"])
 
 # Serve locally-uploaded assets when no external object storage is configured.
 if not settings.STORAGE_BUCKET:
@@ -62,6 +63,26 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT NULL"))
         await conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_cards INTEGER NOT NULL DEFAULT 0"))
         await conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_expires_at TIMESTAMPTZ NULL"))
+
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS signup_requests (
+                    id UUID PRIMARY KEY,
+                    company_name VARCHAR(255) NOT NULL,
+                    contact_name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    phone VARCHAR(50) NULL,
+                    plan_interest VARCHAR(50) NULL,
+                    team_size VARCHAR(50) NULL,
+                    notes TEXT NULL,
+                    status VARCHAR(30) NOT NULL DEFAULT 'new',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_signup_requests_email ON signup_requests(email)"))
 
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))

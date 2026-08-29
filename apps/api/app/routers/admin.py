@@ -163,6 +163,25 @@ async def schema_repair(
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_url TEXT NULL"))
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_cards INTEGER NOT NULL DEFAULT 0"))
     await db.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS complimentary_nfc_expires_at TIMESTAMPTZ NULL"))
+    await db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS signup_requests (
+              id UUID PRIMARY KEY,
+              company_name VARCHAR(255) NOT NULL,
+              contact_name VARCHAR(255) NOT NULL,
+              email VARCHAR(255) NOT NULL,
+              phone VARCHAR(50) NULL,
+              plan_interest VARCHAR(50) NULL,
+              team_size VARCHAR(50) NULL,
+              notes TEXT NULL,
+              status VARCHAR(30) NOT NULL DEFAULT 'new',
+              created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+    )
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_signup_requests_email ON signup_requests(email)"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL"))

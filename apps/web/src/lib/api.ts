@@ -229,3 +229,33 @@ export async function verifyLeadPhoneOtp(payload: {
   }
   return (await res.json()) as { verified: boolean };
 }
+
+export async function submitSignupRequest(payload: {
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone?: string;
+  plan_interest?: string;
+  team_size?: string;
+  notes?: string;
+}): Promise<{ request_id: string; submitted: boolean; message: string }> {
+  const res = await fetch(proxied("/api/v1/public/signup-request"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let detail = "Could not submit signup request.";
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback detail
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as { request_id: string; submitted: boolean; message: string };
+}
