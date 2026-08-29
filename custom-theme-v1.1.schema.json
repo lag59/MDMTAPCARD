@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mdmcreation.com/schemas/custom-theme-v1.1.schema.json",
+  "title": "MDM TapCard Custom Theme v1.1",
+  "description": "Forward-compatible custom theme schema for future MDM TapCard design builds.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "layout",
+    "palette"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": [
+        "1.1.0"
+      ],
+      "description": "Schema version marker for custom theme payloads."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional display name for internal template catalogs."
+    },
+    "layout": {
+      "type": "string",
+      "enum": [
+        "classic",
+        "minimal",
+        "corporate",
+        "spotlight"
+      ],
+      "description": "Card layout identifier."
+    },
+    "backgroundImage": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional full-bleed background image URL."
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bg",
+        "text",
+        "sub",
+        "glass",
+        "save",
+        "inquiry",
+        "accent"
+      ],
+      "properties": {
+        "bg": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tailwind background classes."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary text color classes."
+        },
+        "sub": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secondary text color classes."
+        },
+        "glass": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Card surface classes."
+        },
+        "save": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary button classes."
+        },
+        "inquiry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secondary button classes."
+        },
+        "accent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accent element classes."
+        }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headingClass": {
+          "type": "string",
+          "description": "Optional class for headings/name/title groups."
+        },
+        "bodyClass": {
+          "type": "string",
+          "description": "Optional class for body/contact text groups."
+        }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cardShadowClass": {
+          "type": "string",
+          "description": "Optional shadow class for card container depth."
+        },
+        "glassBlurClass": {
+          "type": "string",
+          "description": "Optional blur class for glassmorphism surfaces."
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "string",
+          "description": "Design author or owning team."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 creation timestamp."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional catalog tags for filtering/search."
+        }
+      }
+    }
+  }
+}

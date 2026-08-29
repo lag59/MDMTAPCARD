@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { submitSignupRequest } from "@/lib/api";
 
 const primaryPlans = [
@@ -12,6 +12,7 @@ const primaryPlans = [
     cadence: "/month",
     description: "A lightweight starting plan for solo professionals and pilots.",
     features: ["Digital card management", "Lead capture", "NFC-ready profiles"],
+    featured: false,
   },
   {
     key: "basic_yearly",
@@ -20,6 +21,7 @@ const primaryPlans = [
     cadence: "/year",
     description: "Save over monthly billing while keeping the same Basic feature set.",
     features: ["Digital card management", "Lead capture", "Annual discount"],
+    featured: false,
   },
   {
     key: "pro_monthly",
@@ -37,6 +39,7 @@ const primaryPlans = [
     cadence: "/year",
     description: "Annual Pro plan for lower total cost and predictable billing.",
     features: ["Everything in Pro Monthly", "Annual discount", "Priority onboarding"],
+    featured: false,
   },
 ] as const;
 
@@ -60,6 +63,32 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<"checking" | "connected" | "unreachable">("checking");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkHealth = async () => {
+      try {
+        const proxyRes = await fetch("/api/proxy/health", { cache: "no-store" });
+        if (proxyRes.ok) {
+          if (mounted) setHealthStatus("connected");
+          return;
+        }
+
+        const apiBase = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_URL ?? "https://mdm-tapcard-api.fly.dev";
+        const directRes = await fetch(`${apiBase}/health`, { cache: "no-store" });
+        if (mounted) setHealthStatus(directRes.ok ? "connected" : "unreachable");
+      } catch {
+        if (mounted) setHealthStatus("unreachable");
+      }
+    };
+
+    checkHealth();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -114,6 +143,24 @@ export default function Home() {
             <p className="inline-flex rounded-full border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">
               NFC business cards + lead capture
             </p>
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
+                  healthStatus === "connected"
+                    ? "bg-emerald-500/20 text-emerald-200"
+                    : healthStatus === "unreachable"
+                      ? "bg-rose-500/20 text-rose-200"
+                      : "bg-slate-500/20 text-slate-200"
+                }`}
+              >
+                {healthStatus === "connected"
+                  ? "Backend Connected"
+                  : healthStatus === "unreachable"
+                    ? "Backend Unreachable"
+                    : "Checking Backend..."}
+              </span>
+              <span className="text-slate-400">Landing v2026.08.29</span>
+            </div>
             <h2 className="mt-5 text-4xl font-bold leading-tight md:text-5xl">
               Turn every tap into a tracked lead.
             </h2>

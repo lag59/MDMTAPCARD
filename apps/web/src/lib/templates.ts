@@ -183,16 +183,35 @@ export const DEFAULT_TEMPLATE_ID = "dark";
 // ── Custom templates ─────────────────────────────────────────────────────────
 
 export interface CustomTheme {
+  /** Optional schema/version marker for forward compatibility. */
+  version?: "1.1.0";
   layout: LayoutId;
   palette: Palette;
   /** Optional full-bleed background image URL. */
   backgroundImage?: string;
   name?: string;
+  /** Optional typography classes for future renderer use. */
+  typography?: {
+    headingClass?: string;
+    bodyClass?: string;
+  };
+  /** Optional visual effect classes for future renderer use. */
+  effects?: {
+    cardShadowClass?: string;
+    glassBlurClass?: string;
+  };
+  /** Optional metadata for asset governance/workflow tooling. */
+  meta?: {
+    author?: string;
+    createdAt?: string;
+    tags?: string[];
+  };
 }
 
 export function isValidCustomTheme(value: unknown): value is CustomTheme {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
+  if (v.version !== undefined && v.version !== "1.1.0") return false;
   const layoutOk = ["classic", "minimal", "corporate", "spotlight"].includes(v.layout as string);
   const p = v.palette as Record<string, unknown> | undefined;
   const paletteOk =
@@ -204,7 +223,29 @@ export function isValidCustomTheme(value: unknown): value is CustomTheme {
     typeof p.save === "string" &&
     typeof p.inquiry === "string" &&
     typeof p.accent === "string";
-  return layoutOk && paletteOk;
+
+  const t = v.typography as Record<string, unknown> | undefined;
+  const typographyOk =
+    t === undefined ||
+    ((t.headingClass === undefined || typeof t.headingClass === "string") &&
+      (t.bodyClass === undefined || typeof t.bodyClass === "string"));
+
+  const e = v.effects as Record<string, unknown> | undefined;
+  const effectsOk =
+    e === undefined ||
+    ((e.cardShadowClass === undefined || typeof e.cardShadowClass === "string") &&
+      (e.glassBlurClass === undefined || typeof e.glassBlurClass === "string"));
+
+  const m = v.meta as Record<string, unknown> | undefined;
+  const tags = m?.tags;
+  const tagsOk = tags === undefined || (Array.isArray(tags) && tags.every((tag) => typeof tag === "string"));
+  const metaOk =
+    m === undefined ||
+    ((m.author === undefined || typeof m.author === "string") &&
+      (m.createdAt === undefined || typeof m.createdAt === "string") &&
+      tagsOk);
+
+  return layoutOk && paletteOk && typographyOk && effectsOk && metaOk;
 }
 
 // ── Resolution ───────────────────────────────────────────────────────────────
