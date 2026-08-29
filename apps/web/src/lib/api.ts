@@ -37,19 +37,27 @@ async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): P
     throw new Error("No access token found. Please sign in again.");
   }
 
+  const proxiedUrl = proxied(path);
+  const directUrl = `${BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+
+  const requestInit: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
+  };
+
   let response: Response;
   try {
-    response = await fetch(proxied(path), {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-    });
+    response = await fetch(proxiedUrl, requestInit);
+    if (response.status === 405) {
+      response = await fetch(directUrl, requestInit);
+    }
   } catch {
-    throw new Error(`Network error reaching API via ${PROXY_PREFIX}. Verify frontend deploy and backend health.`);
+    throw new Error(`Network error reaching API via ${PROXY_PREFIX} or direct API. Verify frontend deploy and backend health.`);
   }
 
   if (!response.ok) {
@@ -132,11 +140,23 @@ export async function uploadLogo(file: File): Promise<string> {
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(proxied("/api/v1/profiles/upload-logo"), {
+  const path = "/api/v1/profiles/upload-logo";
+  const proxiedUrl = proxied(path);
+  const directUrl = `${BASE_URL}${path}`;
+
+  let res = await fetch(proxiedUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
+
+  if (res.status === 405) {
+    res = await fetch(directUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  }
 
   if (!res.ok) {
     let detail = `Upload failed (${res.status})`;
