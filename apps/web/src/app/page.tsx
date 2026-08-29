@@ -55,6 +55,7 @@ export default function Home() {
   const router = useRouter();
   const formFieldClass =
     "mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200";
+  const logoSrc = "/brand/mdm-tapcard-logo.png";
 
   const [form, setForm] = useState({
     company_name: "",
@@ -68,6 +69,7 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<"checking" | "connected" | "unreachable">("checking");
 
   useEffect(() => {
@@ -121,23 +123,23 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50/40 text-slate-900">
       <div className="mx-auto max-w-6xl px-6 py-8 md:py-12">
         <header className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-cyan-300">MDM Creation</p>
-            <h1 className="text-xl font-semibold">TapCard</h1>
+            <p className="text-xs uppercase tracking-[0.2em] text-indigo-700">MDM Creation</p>
+            <h1 className="text-xl font-semibold text-slate-900">TapCard</h1>
           </div>
           <nav className="flex items-center gap-3">
-            <a href="#pricing" className="text-sm text-slate-300 hover:text-white">
+            <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900">
               Pricing
             </a>
-            <a href="#signup" className="text-sm text-slate-300 hover:text-white">
+            <a href="#signup" className="text-sm text-slate-600 hover:text-slate-900">
               Sign up
             </a>
             <Link
               href="/login"
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
             >
               Sign in
             </Link>
@@ -145,47 +147,71 @@ export default function Home() {
         </header>
 
         <section className="mt-12 md:mt-16">
-          <div className="max-w-3xl">
-            <p className="inline-flex rounded-full border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">
-              NFC business cards + lead capture
-            </p>
-            <div className="mt-3 flex items-center gap-2 text-xs">
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                  healthStatus === "connected"
-                    ? "bg-emerald-500/20 text-emerald-200"
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2">
+            <div className="order-2 lg:order-1">
+              <p className="inline-flex rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs text-indigo-800">
+                NFC business cards + lead capture
+              </p>
+              <div className="mt-3 flex items-center gap-2 text-xs">
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
+                    healthStatus === "connected"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : healthStatus === "unreachable"
+                        ? "bg-rose-100 text-rose-700"
+                        : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {healthStatus === "connected"
+                    ? "Backend Connected"
                     : healthStatus === "unreachable"
-                      ? "bg-rose-500/20 text-rose-200"
-                      : "bg-slate-500/20 text-slate-200"
-                }`}
-              >
-                {healthStatus === "connected"
-                  ? "Backend Connected"
-                  : healthStatus === "unreachable"
-                    ? "Backend Unreachable"
-                    : "Checking Backend..."}
-              </span>
-              <span className="text-slate-400">Landing v2026.08.29</span>
+                      ? "Backend Unreachable"
+                      : "Checking Backend..."}
+                </span>
+                <span className="text-slate-500">Landing v2026.08.29</span>
+              </div>
+              <h2 className="mt-5 text-4xl font-bold leading-tight text-slate-900 md:text-5xl">
+                Turn every tap into a tracked lead.
+              </h2>
+              <p className="mt-4 text-base text-slate-600 md:text-lg">
+                TapCard helps teams deploy digital cards with NFC workflows, profile management, and lead capture in one platform.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <a
+                  href="#signup"
+                  className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                >
+                  Start sign-up
+                </a>
+                <a
+                  href="#pricing"
+                  className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  View options & prices
+                </a>
+              </div>
             </div>
-            <h2 className="mt-5 text-4xl font-bold leading-tight md:text-5xl">
-              Turn every tap into a tracked lead.
-            </h2>
-            <p className="mt-4 text-base text-slate-300 md:text-lg">
-              TapCard helps teams deploy digital cards with NFC workflows, profile management, and lead capture in one platform.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <a
-                href="#signup"
-                className="rounded-lg bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-              >
-                Start sign-up
-              </a>
-              <a
-                href="#pricing"
-                className="rounded-lg border border-slate-700 px-5 py-2.5 text-sm font-semibold hover:bg-slate-800"
-              >
-                View options & prices
-              </a>
+
+            <div className="order-1 lg:order-2">
+              <div className="rounded-3xl bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-500 p-[1px] shadow-xl">
+                <div className="rounded-3xl bg-white p-5 md:p-7">
+                  {!logoFailed ? (
+                    <img
+                      src={logoSrc}
+                      alt="MDM TapCard logo"
+                      className="h-auto w-full rounded-2xl object-contain"
+                      onError={() => setLogoFailed(true)}
+                    />
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                      <p className="text-xl font-semibold text-slate-800">MDM TapCard</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        Add your logo at <span className="font-mono">apps/web/public/brand/mdm-tapcard-logo.png</span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -204,17 +230,17 @@ export default function Home() {
                 key={plan.key}
                 className={`rounded-2xl border p-5 ${
                   plan.featured
-                    ? "border-cyan-400/60 bg-cyan-400/10"
-                    : "border-slate-800 bg-slate-900/70"
+                    ? "border-indigo-300 bg-indigo-50 shadow-md"
+                    : "border-slate-200 bg-white shadow-sm"
                 }`}
               >
-                <p className="text-sm text-slate-300">{plan.name}</p>
-                <p className="mt-2 text-3xl font-bold">
+                <p className="text-sm text-slate-600">{plan.name}</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">
                   {plan.price}
-                  <span className="ml-1 text-sm font-medium text-slate-400">{plan.cadence}</span>
+                  <span className="ml-1 text-sm font-medium text-slate-500">{plan.cadence}</span>
                 </p>
-                <p className="mt-3 text-sm text-slate-300">{plan.description}</p>
-                <ul className="mt-4 space-y-1 text-sm text-slate-300">
+                <p className="mt-3 text-sm text-slate-600">{plan.description}</p>
+                <ul className="mt-4 space-y-1 text-sm text-slate-600">
                   {plan.features.map((feature) => (
                     <li key={feature}>• {feature}</li>
                   ))}
@@ -223,11 +249,11 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <p className="text-sm font-semibold text-slate-200">Legacy plans (available for existing packages)</p>
-            <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-slate-300 md:grid-cols-2">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-slate-700">Legacy plans (available for existing packages)</p>
+            <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-slate-600 md:grid-cols-2">
               {legacyPlans.map((plan) => (
-                <div key={plan.key} className="rounded-lg border border-slate-800 px-3 py-2">
+                <div key={plan.key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                   {plan.name}: <span className="font-semibold">{plan.price}</span>
                 </div>
               ))}
