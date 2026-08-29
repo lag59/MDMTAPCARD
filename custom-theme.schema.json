@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mdmcreation.com/schemas/custom-theme.schema.json",
+  "title": "MDM TapCard Custom Theme",
+  "description": "Strict schema for uploaded custom card theme JSON used by MDM TapCard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "layout",
+    "palette"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional display name for the uploaded theme."
+    },
+    "layout": {
+      "type": "string",
+      "enum": [
+        "classic",
+        "minimal",
+        "corporate",
+        "spotlight"
+      ],
+      "description": "Card layout identifier."
+    },
+    "backgroundImage": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional full-bleed background image URL."
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bg",
+        "text",
+        "sub",
+        "glass",
+        "save",
+        "inquiry",
+        "accent"
+      ],
+      "properties": {
+        "bg": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Tailwind background classes."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary text color classes."
+        },
+        "sub": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secondary text color classes."
+        },
+        "glass": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Card surface classes."
+        },
+        "save": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary button classes."
+        },
+        "inquiry": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Secondary button classes."
+        },
+        "accent": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Accent element classes."
+        }
+      }
+    }
+  }
+}
