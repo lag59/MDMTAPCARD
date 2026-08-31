@@ -1,0 +1,57 @@
+name: Nightly Database Backup
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # 08:00 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install AWS CLI
+        run: pip install --quiet awscli
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+          echo "DUMP_FILE=mdm-tapcard-${timestamp}.dump.gz" >> "$GITHUB_ENV"
+          pg_dump --format=custom "$DATABASE_URL" | gzip -9 > "/tmp/mdm-tapcard-${timestamp}.dump.gz"
+
+      - name: Upload backup to Tigris (private bucket)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+          AWS_REGION: auto
+        run: |
+          set -euo pipefail
+          aws s3 cp "/tmp/${DUMP_FILE}" "s3://mdm-tapcard-backups/${DUMP_FILE}" \
+            --endpoint-url "$AWS_ENDPOINT_URL_S3"
+
+      - name: Prune backups older than 14 days
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL_S3: https://fly.storage.tigris.dev
+          AWS_REGION: auto
+        run: |
+          set -euo pipefail
+          cutoff=$(date -u -d "-14 days" +%s)
+          aws s3api list-objects-v2 --bucket mdm-tapcard-backups --endpoint-url "$AWS_ENDPOINT_URL_S3" \
+            --query "Contents[].Key" --output text | tr '\t' '\n' | while read -r key; do
+            [ -z "$key" ] && continue
+            ts=$(echo "$key" | grep -oE '[0-9]{8}T[0-9]{6}Z' || true)
+            [ -z "$ts" ] && continue
+            key_epoch=$(date -u -d "${ts:0:8} ${ts:9:2}:${ts:11:2}:${ts:13:2}" +%s)
+            if [ "$key_epoch" -lt "$cutoff" ]; then
+              echo "Deleting old backup: $key"
+              aws s3 rm "s3://mdm-tapcard-backups/${key}" --endpoint-url "$AWS_ENDPOINT_URL_S3"
+            fi
+          done
