@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+.env.local
+.env.*.local
+.vercel
+README.md
+.eslintrc.json
+.vscode
+.idea
+*.log
