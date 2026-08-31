@@ -1,0 +1,73 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy-api:
+    name: Deploy API to Fly.io
+    runs-on: ubuntu-latest
+    if: github.repository == 'lag59/MDMTAPCARD'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for API changes
+        id: changes
+        run: |
+          if git diff --quiet HEAD^ HEAD -- apps/api 2>/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up flyctl
+        if: steps.changes.outputs.changed == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: apps/api
+        run: flyctl deploy --remote-only --app mdm-tapcard-api
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-web:
+    name: Deploy web to Vercel
+    runs-on: ubuntu-latest
+    if: github.repository == 'lag59/MDMTAPCARD'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for web changes
+        id: changes
+        run: |
+          if git diff --quiet HEAD^ HEAD -- apps/web 2>/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js
+        if: steps.changes.outputs.changed == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy to Vercel
+        if: steps.changes.outputs.changed == 'true'
+        working-directory: apps/web
+        run: |
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: team_EzQp4U57hAfs349wz9sYAPpK
+          VERCEL_PROJECT_ID: prj_jiy1hYlhwKpc5fLWZ3O7KFVf3xFO
