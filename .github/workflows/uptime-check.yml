@@ -1,0 +1,35 @@
+name: Uptime Check
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # every 10 minutes
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API health
+        run: |
+          set -euo pipefail
+          status=$(curl -s -o /tmp/api_body.json -w "%{http_code}" https://api.mdmsolutionlab.com/health)
+          echo "API status: $status"
+          cat /tmp/api_body.json
+          if [ "$status" != "200" ]; then
+            echo "::error::API health check failed with status $status"
+            exit 1
+          fi
+          if ! grep -q '"status":"ok"' /tmp/api_body.json; then
+            echo "::error::API health check returned unexpected body"
+            exit 1
+          fi
+
+      - name: Check web frontend
+        run: |
+          set -euo pipefail
+          status=$(curl -s -o /dev/null -w "%{http_code}" https://mdmsolutionlab.com)
+          echo "Web status: $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::Frontend check failed with status $status"
+            exit 1
+          fi
