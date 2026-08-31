@@ -9,8 +9,11 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL client (v18, matching Neon)
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
 
       - name: Install AWS CLI
         run: pip install --quiet awscli
