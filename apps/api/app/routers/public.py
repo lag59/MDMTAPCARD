@@ -2,9 +2,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 import httpx
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +16,7 @@ from app.models.signup_request import SignupRequest
 from app.utils.email import send_email
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 SELF_SERVICE_OPTIONS = {
     "digital_card",
@@ -127,7 +130,9 @@ class SignupRequestOut(BaseModel):
 
 
 @router.post("/signup-request", response_model=SignupRequestOut)
+@limiter.limit("5/minute")
 async def submit_signup_request(
+    request: Request,
     body: SignupRequestIn,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):

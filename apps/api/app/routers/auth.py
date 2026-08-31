@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
@@ -9,6 +11,7 @@ from app.database import get_db
 from app.models.user import User
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 class LoginRequest(BaseModel):
@@ -23,7 +26,8 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+@limiter.limit("10/minute")
+async def login(request: Request, body: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(select(User).where(User.email == body.email, User.is_active == True))
     user = result.scalar_one_or_none()
     if not user or not user.hashed_password or not verify_password(body.password, user.hashed_password):

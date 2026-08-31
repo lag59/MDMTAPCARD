@@ -1,10 +1,24 @@
 import asyncio
 import uuid
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from app.models.signup_request import SignupRequest
 from app.routers import public
+
+
+def _fake_request() -> Request:
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/public/signup-request",
+        "headers": [],
+        "client": ("127.0.0.1", 0),
+        "server": ("testserver", 80),
+        "query_string": b"",
+        "scheme": "http",
+    }
+    return Request(scope)
 
 
 class _ScalarResult:
@@ -79,6 +93,7 @@ def test_signup_creates_mocked_checkout_for_each_service(monkeypatch) -> None:
         session = _FakeSession()
         response = _run(
             public.submit_signup_request(
+                _fake_request(),
                 _signup_body(service_interest, quantity=requested_quantity),
                 session,  # type: ignore[arg-type]
             )
@@ -110,6 +125,7 @@ def test_tap_button_requires_shipping_before_checkout(monkeypatch) -> None:
     try:
         _run(
             public.submit_signup_request(
+                _fake_request(),
                 _signup_body("tap_button_for_phone", shipping=False),
                 _FakeSession(),  # type: ignore[arg-type]
             )
@@ -136,6 +152,7 @@ def test_duplicate_signup_does_not_create_checkout(monkeypatch) -> None:
     try:
         _run(
             public.submit_signup_request(
+                _fake_request(),
                 _signup_body("tap_button_for_phone"),
                 _FakeSession(existing=SignupRequest()),  # type: ignore[arg-type]
             )

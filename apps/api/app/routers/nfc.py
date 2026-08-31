@@ -2,9 +2,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from nanoid import generate
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,7 @@ from app.models.user import UserRole
 
 router = APIRouter()
 registration_router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 public_router = APIRouter()
 
 # Users who can prepare/confirm/disable/replace writes from mobile.
@@ -523,7 +526,9 @@ async def list_inventory(
 
 @registration_router.get("/t/{public_token}")
 @public_router.get("/t/{public_token}")
+@limiter.limit("30/minute")
 async def resolve_public_tag(
+    request: Request,
     public_token: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
