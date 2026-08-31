@@ -8,6 +8,17 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    services:
+      verifydb:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: verify
+          POSTGRES_DB: verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
     steps:
       - name: Install PostgreSQL client (v18, matching Neon)
         run: |
@@ -26,6 +37,29 @@ jobs:
           timestamp=$(date -u +%Y%m%dT%H%M%SZ)
           echo "DUMP_FILE=mdm-tapcard-${timestamp}.dump.gz" >> "$GITHUB_ENV"
           /usr/lib/postgresql/18/bin/pg_dump --format=custom "$DATABASE_URL" | gzip -9 > "/tmp/mdm-tapcard-${timestamp}.dump.gz"
+
+      - name: Verify backup is restorable
+        env:
+          PGPASSWORD: verify
+        run: |
+          set -euo pipefail
+          # Confirm the archive table of contents is readable and non-empty.
+          gunzip -c "/tmp/${DUMP_FILE}" | /usr/lib/postgresql/18/bin/pg_restore --list > /tmp/toc.txt
+          if [ ! -s /tmp/toc.txt ]; then
+            echo "::error::Backup archive table of contents is empty"
+            exit 1
+          fi
+          # Actually restore into a throwaway Postgres to prove the dump is usable.
+          gunzip -c "/tmp/${DUMP_FILE}" | /usr/lib/postgresql/18/bin/pg_restore \
+            --no-owner --no-privileges --dbname "postgresql://postgres:verify@localhost:5432/verify"
+          table_count=$(/usr/lib/postgresql/18/bin/psql \
+            "postgresql://postgres:verify@localhost:5432/verify" -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public';")
+          echo "Restored public tables: $table_count"
+          if [ "$table_count" -lt 1 ]; then
+            echo "::error::Restore produced no tables; backup may be invalid"
+            exit 1
+          fi
 
       - name: Upload backup to Tigris (private bucket)
         env:

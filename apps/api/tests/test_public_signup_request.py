@@ -8,12 +8,15 @@ from app.routers import public
 
 
 def _fake_request() -> Request:
+    # Unique client IP per call so the per-IP rate limiter does not accumulate
+    # state across independent test cases in the same process.
+    client_host = f"10.0.{uuid.uuid4().int % 256}.{uuid.uuid4().int % 256}"
     scope = {
         "type": "http",
         "method": "POST",
         "path": "/api/v1/public/signup-request",
         "headers": [],
-        "client": ("127.0.0.1", 0),
+        "client": (client_host, 0),
         "server": ("testserver", 80),
         "query_string": b"",
         "scheme": "http",
@@ -83,13 +86,19 @@ def test_signup_creates_mocked_checkout_for_each_service(monkeypatch) -> None:
 
     monkeypatch.setattr(public, "_create_square_checkout_link", fake_checkout)
 
+    async def fake_send_email(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(public, "send_email", fake_send_email)
+
+    # (service, requested_quantity, unit_price, expected_quantity, is_design)
     cases = [
-        ("digital_card", 4, 399, 1),
-        ("physical_tap_card", 2, 9900, 2),
-        ("physical_tap_card_with_design", 3, 14900, 3),
-        ("tap_button_for_phone", 2, 7900, 2),
+        ("digital_card", 4, 399, 1, False),
+        ("physical_tap_card", 2, 9900, 2, False),
+        ("physical_tap_card_with_design", 3, 14900, 3, True),
+        ("tap_button_for_phone", 2, 7900, 2, False),
     ]
-    for service_interest, requested_quantity, unit_price, expected_quantity in cases:
+    for service_interest, requested_quantity, unit_price, expected_quantity, is_design in cases:
         session = _FakeSession()
         response = _run(
             public.submit_signup_request(
@@ -99,17 +108,26 @@ def test_signup_creates_mocked_checkout_for_each_service(monkeypatch) -> None:
             )
         )
 
-        assert response.payment_required is True  # type: ignore[union-attr]
-        assert response.checkout_url == "https://square.test/checkout"  # type: ignore[union-attr]
         assert session.committed is True
         assert session.added is not None
-        assert session.added.amount_cents == unit_price * expected_quantity
         assert session.added.quantity == expected_quantity
         assert session.added.shipping_country == "US"
 
-    assert [call["amount_cents"] for call in calls] == [399, 19800, 44700, 15800]
+        if is_design:
+            # Custom-design orders are quoted manually, so they skip checkout.
+            assert response.payment_required is False  # type: ignore[union-attr]
+            assert response.is_design_request is True  # type: ignore[union-attr]
+            assert response.checkout_url is None  # type: ignore[union-attr]
+            assert session.added.amount_cents is None
+        else:
+            assert response.payment_required is True  # type: ignore[union-attr]
+            assert response.checkout_url == "https://square.test/checkout"  # type: ignore[union-attr]
+            assert session.added.amount_cents == unit_price * expected_quantity
+
+    # Only the three non-design services create a Square checkout link.
+    assert [call["amount_cents"] for call in calls] == [399, 19800, 15800]
     assert "digital_card x1" in str(calls[0]["title"])
-    assert "tap_button_for_phone x2" in str(calls[3]["title"])
+    assert "tap_button_for_phone x2" in str(calls[2]["title"])
 
 
 def test_tap_button_requires_shipping_before_checkout(monkeypatch) -> None:
