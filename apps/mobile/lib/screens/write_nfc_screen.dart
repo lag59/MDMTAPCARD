@@ -144,6 +144,21 @@ class _WriteNfcScreenState extends ConsumerState<WriteNfcScreen> {
     return '${compact.substring(0, 4)}***${compact.substring(compact.length - 2)}';
   }
 
+  void _resetForNextCard() {
+    setState(() {
+      _step = WriteStep.idle;
+      _tagId = null;
+      _profileUrl = null;
+      _profileName = null;
+      _maskedUid = null;
+      _tagType = null;
+      _capacityBytes = null;
+      _statusLabel = null;
+      _errorMessage = null;
+      _busy = false;
+    });
+  }
+
   Future<void> _testCard() async {
     final value = await NfcService.readUrl();
     if (!mounted) return;
@@ -355,6 +370,12 @@ class _WriteNfcScreenState extends ConsumerState<WriteNfcScreen> {
                     style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _resetForNextCard,
+                icon: const Icon(Icons.add),
+                label: Text(_hardwareType == 'button' ? 'Program Another TapButton' : 'Program Another Card'),
               ),
             ],
           ],
