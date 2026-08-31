@@ -18,7 +18,9 @@ jobs:
       - name: Check for API changes
         id: changes
         run: |
-          if git diff --quiet HEAD^ HEAD -- apps/api 2>/dev/null; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD^ HEAD -- apps/api 2>/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -47,7 +49,9 @@ jobs:
       - name: Check for web changes
         id: changes
         run: |
-          if git diff --quiet HEAD^ HEAD -- apps/web 2>/dev/null; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet HEAD^ HEAD -- apps/web 2>/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
