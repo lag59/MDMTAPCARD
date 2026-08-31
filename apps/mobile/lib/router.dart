@@ -26,8 +26,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/dashboard', builder: (ctx, state) => const DashboardScreen()),
       GoRoute(path: '/clients', builder: (ctx, state) => const ClientsScreen()),
       GoRoute(
-        path: '/clients/:id',
-        builder: (ctx, state) => ClientDetailScreen(clientId: state.pathParameters['id']!),
+        path: '/clients/:slug',
+        builder: (ctx, state) => ClientDetailScreen(slug: state.pathParameters['slug']!),
       ),
       GoRoute(path: '/cards/new', builder: (ctx, state) => const CreateCardScreen()),
       GoRoute(

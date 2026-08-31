@@ -10,26 +10,35 @@ class SettingsScreen extends StatelessWidget {
     if (context.mounted) context.go('/signin');
   }
 
+  void _comingSoon(BuildContext context, String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature is coming soon.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
-          const ListTile(
-            leading: Icon(Icons.language),
-            title: Text('Language'),
-            subtitle: Text('English / Spanish'),
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: const Text('Language'),
+            subtitle: const Text('English / Spanish'),
+            onTap: () => _comingSoon(context, 'Language selection'),
           ),
-          const ListTile(
-            leading: Icon(Icons.security),
-            title: Text('Security'),
-            subtitle: Text('MFA and account access'),
+          ListTile(
+            leading: const Icon(Icons.security),
+            title: const Text('Security'),
+            subtitle: const Text('MFA and account access'),
+            onTap: () => _comingSoon(context, 'Security settings'),
           ),
-          const ListTile(
-            leading: Icon(Icons.subscriptions),
-            title: Text('Subscription'),
-            subtitle: Text('Manage plan and renewals'),
+          ListTile(
+            leading: const Icon(Icons.subscriptions),
+            title: const Text('Subscription'),
+            subtitle: const Text('Manage plan and renewals'),
+            onTap: () => _comingSoon(context, 'Subscription management'),
           ),
           const Divider(),
           ListTile(

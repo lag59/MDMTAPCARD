@@ -59,6 +59,11 @@ class ApiClient {
     return res.data;
   }
 
+  static Future<Map<String, dynamic>> getProfileForEdit(String slug) async {
+    final res = await _dio.get('/api/v1/profiles/$slug/edit');
+    return res.data;
+  }
+
   // ── NFC ───────────────────────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> prepareTag(String profileId) async {
@@ -117,5 +122,15 @@ class ApiClient {
   static Future<List<dynamic>> getCompanies() async {
     final res = await _dio.get('/api/v1/admin/companies');
     return res.data as List<dynamic>;
+  }
+
+  static Future<List<dynamic>> getClients() async {
+    final res = await _dio.get('/api/v1/admin/profiles');
+    return res.data as List<dynamic>;
+  }
+
+  static Future<Map<String, dynamic>> getAnalyticsOverview() async {
+    final res = await _dio.get('/api/v1/admin/analytics/overview');
+    return res.data;
   }
 }
