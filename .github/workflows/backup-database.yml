@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           timestamp=$(date -u +%Y%m%dT%H%M%SZ)
           echo "DUMP_FILE=mdm-tapcard-${timestamp}.dump.gz" >> "$GITHUB_ENV"
-          pg_dump --format=custom "$DATABASE_URL" | gzip -9 > "/tmp/mdm-tapcard-${timestamp}.dump.gz"
+          /usr/lib/postgresql/18/bin/pg_dump --format=custom "$DATABASE_URL" | gzip -9 > "/tmp/mdm-tapcard-${timestamp}.dump.gz"
 
       - name: Upload backup to Tigris (private bucket)
         env:
