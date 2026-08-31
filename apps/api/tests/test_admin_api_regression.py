@@ -32,6 +32,21 @@ def test_dashboard_role_access(client: httpx.Client, admin_token: str, owner_tok
     assert owner_resp.status_code == 403
 
 
+def test_owner_cannot_create_profile_with_custom_template_code(client: httpx.Client, owner_token: str) -> None:
+    response = client.post(
+        "/api/v1/profiles/",
+        headers=_auth_headers(owner_token),
+        json={
+            "display_name": f"Custom Template {uuid.uuid4().hex[:6]}",
+            "theme_id": "custom",
+            "custom_theme": '{"layout":"classic","palette":{}}',
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json().get("detail") == "Only super admins can create profiles with custom template code."
+
+
 def test_create_user_with_invalid_company_returns_404(client: httpx.Client, admin_token: str) -> None:
     random_company_id = str(uuid.uuid4())
     email = f"regression-{uuid.uuid4().hex[:8]}@example.com"

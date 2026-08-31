@@ -1,0 +1,33 @@
+{
+  "name": "MDM Neon Executive",
+  "slug": "mdm-neon-executive",
+  "layout": "spotlight",
+  "palette": {
+    "bg": "bg-black",
+    "text": "text-white",
+    "sub": "text-slate-300",
+    "glass": "bg-black/60 border border-cyan-400/20 backdrop-blur-xl",
+    "save": "bg-gradient-to-r from-cyan-500 via-blue-600 to-fuchsia-600 text-white",
+    "inquiry": "border border-fuchsia-500/70 text-white",
+    "accent": "bg-gradient-to-r from-cyan-400 via-blue-500 to-fuchsia-500"
+  },
+  "assets": {
+    "background": "background.webp",
+    "logo": "logo.png",
+    "tapcardLogo": "tapcard-logo.png",
+    "preview": "preview.jpg"
+  },
+  "features": {
+    "call": true,
+    "text": true,
+    "email": true,
+    "whatsapp": true,
+    "saveContact": true,
+    "downloadContact": true,
+    "wallet": true,
+    "qr": true,
+    "social": true,
+    "inquiry": true
+  },
+  "locked": true
+}

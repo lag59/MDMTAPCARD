@@ -4,6 +4,7 @@ type Props = {
   searchParams?: Promise<{
     request_id?: string;
     company?: string;
+    design?: string;
   }>;
 };
 
@@ -11,16 +12,19 @@ export default async function SignupThanksPage({ searchParams }: Props) {
   const params = (await searchParams) ?? {};
   const requestId = params.request_id ?? "";
   const company = params.company ?? "your company";
+  const isDesignRequest = params.design === "1";
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl rounded-3xl border border-cyan-400/30 bg-slate-900 p-8 shadow-2xl">
         <p className="inline-flex rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-200">
-          Signup request received
+          {isDesignRequest ? "Custom design request received" : "Signup request received"}
         </p>
         <h1 className="mt-4 text-3xl font-bold">Thanks, {company}!</h1>
         <p className="mt-3 text-slate-300">
-          Your onboarding request was submitted successfully. Our team will review it and contact you with setup steps.
+          {isDesignRequest
+            ? "Your custom design request was submitted successfully. Our team will follow up to scope your layout and send a final quote and payment link."
+            : "Your onboarding request was submitted successfully. Our team will review it and contact you with setup steps."}
         </p>
 
         {requestId ? (

@@ -9,7 +9,7 @@ function normalizeBaseUrl(url: string): string {
 
 function resolveApiBaseUrl(): string {
   const envUrl = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl) return normalizeBaseUrl(envUrl);
+  if (envUrl && !normalizeBaseUrl(envUrl).includes("api.mdmsolutionlab.com")) return normalizeBaseUrl(envUrl);
   return PROD_API_FALLBACK;
 }
 
@@ -17,7 +17,6 @@ async function proxyToApi(request: NextRequest, paramsPromise: Promise<{ path: s
   const { path } = await paramsPromise;
   const apiBase = resolveApiBaseUrl();
   const targetPath = `/${path.join("/")}`;
-  const targetUrl = `${apiBase}${targetPath}${request.nextUrl.search}`;
 
   const headers = new Headers();
   const incomingContentType = request.headers.get("content-type");
@@ -32,12 +31,14 @@ async function proxyToApi(request: NextRequest, paramsPromise: Promise<{ path: s
     body = buffer.byteLength > 0 ? buffer : undefined;
   }
 
-  const upstream = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body,
-    cache: "no-store",
-  });
+  const requestOptions = { method: request.method, headers, body, cache: "no-store" as const };
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${apiBase}${targetPath}${request.nextUrl.search}`, requestOptions);
+  } catch (error) {
+    if (apiBase === PROD_API_FALLBACK) throw error;
+    upstream = await fetch(`${PROD_API_FALLBACK}${targetPath}${request.nextUrl.search}`, requestOptions);
+  }
 
   const upstreamBuffer = await upstream.arrayBuffer();
   const responseHeaders = new Headers();

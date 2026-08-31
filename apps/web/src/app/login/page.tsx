@@ -51,10 +51,10 @@ function LoginForm() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-xl shadow p-6 space-y-4">
-        <h1 className="text-2xl font-bold text-slate-800">MDM TapCard Login</h1>
-        <p className="text-sm text-slate-500">Sign in to open the admin app.</p>
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50/60 flex items-center justify-center p-6">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl ring-1 ring-indigo-100/70 space-y-4">
+        <h1 className="text-2xl font-bold text-slate-900">MDM TapCard Login</h1>
+        <p className="text-sm text-slate-600">Sign in to open the admin app.</p>
 
         <div className="space-y-1">
           <label className="text-sm text-slate-700" htmlFor="email">
@@ -65,7 +65,7 @@ function LoginForm() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
             required
           />
         </div>
@@ -79,7 +79,7 @@ function LoginForm() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900"
+            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-200"
             required
           />
         </div>
@@ -89,7 +89,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-slate-900 text-white rounded-lg py-2 text-sm font-semibold disabled:opacity-60"
+          className="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-cyan-500 hover:to-indigo-500 disabled:opacity-60"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>

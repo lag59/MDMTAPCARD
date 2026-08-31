@@ -1,22 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "@/lib/api";
+import { apiPost, listReusableTemplates, type ImportedTemplate } from "@/lib/api";
 
 export default function NewClientPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<ImportedTemplate[]>([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState("");
+
+  useEffect(() => {
+    listReusableTemplates().then(setTemplates).catch(() => setTemplates([]));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await apiPost("/api/v1/admin/companies", { name });
+      await apiPost("/api/v1/admin/companies", { name, default_template_id: defaultTemplateId || null });
       router.push("/admin/clients");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create client.");
@@ -49,6 +55,14 @@ export default function NewClientPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Acme Corp"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Default Profile Template</label>
+            <select value={defaultTemplateId} onChange={(e) => setDefaultTemplateId(e.target.value)} className={input}>
+              <option value="">No default (choose per profile)</option>
+              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">New profiles for this client automatically use this template unless an admin chooses another.</p>
           </div>
           <button
             type="submit"

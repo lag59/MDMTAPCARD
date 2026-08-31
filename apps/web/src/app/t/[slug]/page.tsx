@@ -1,4 +1,6 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { fetchProfile } from "@/lib/api";
+import ProfileCard from "@/components/ProfileCard";
 
 interface Props {
 	params: Promise<{ slug: string }>;
@@ -20,7 +22,7 @@ export default async function PublicTokenRoute({ params }: Props) {
 		);
 	}
 
-	const data = (await res.json()) as { active?: boolean; slug?: string; redirect_url?: string; message?: string };
+	const data = (await res.json()) as { active?: boolean; slug?: string; message?: string };
 	if (!data.active || !data.slug) {
 		return (
 			<main className="min-h-screen flex items-center justify-center bg-slate-100 px-6">
@@ -32,9 +34,11 @@ export default async function PublicTokenRoute({ params }: Props) {
 		);
 	}
 
-	if (data.redirect_url) {
-		redirect(data.redirect_url);
-	}
+	// Renders the profile directly instead of client-redirecting to /c/[slug],
+	// which forced a second full page navigation (and a second cold SSR pass)
+	// on every physical NFC tap.
+	const profile = await fetchProfile(data.slug);
+	if (!profile) notFound();
 
-	redirect(`/c/${data.slug}`);
+	return <ProfileCard profile={profile} tagToken={slug} />;
 }

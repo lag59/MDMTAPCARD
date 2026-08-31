@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-function normalizeBase(base: string): string {
-  return base.endsWith("/") ? base.slice(0, -1) : base;
-}
-
-function appendSlug(base: string, slug: string): string {
-  const normalized = normalizeBase(base);
-  return normalized.includes("{slug}")
-    ? normalized.replaceAll("{slug}", encodeURIComponent(slug))
-    : `${normalized}/${encodeURIComponent(slug)}`;
-}
-
 function isIOS(userAgent: string): boolean {
   return /iPhone|iPad|iPod/i.test(userAgent);
 }
@@ -26,35 +15,62 @@ export async function GET(
   const { slug } = await params;
   const apiBase = process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-  const apiRes = await fetch(
+  const profileRes = await fetch(
     `${apiBase}/api/v1/profiles/${slug}`,
     { next: { revalidate: 60 } }
   );
 
-  if (!apiRes.ok) {
+  if (!profileRes.ok) {
     return new NextResponse("Not found", { status: 404 });
   }
 
+  const profile = (await profileRes.json()) as { id?: string };
   const ua = req.headers.get("user-agent") ?? "";
-  const appleBase = process.env.NEXT_PUBLIC_APPLE_WALLET_BASE_URL;
-  const googleBase = process.env.NEXT_PUBLIC_GOOGLE_WALLET_BASE_URL;
+  const vcardFallback = () => NextResponse.redirect(new URL(`/api/vcard/${slug}?download=1`, req.url));
 
-  if (isIOS(ua) && appleBase) {
-    return NextResponse.redirect(appendSlug(appleBase, slug));
+  if (!profile.id) {
+    return vcardFallback();
   }
 
-  if (isAndroid(ua) && googleBase) {
-    return NextResponse.redirect(appendSlug(googleBase, slug));
+  if (isIOS(ua)) {
+    // Fetched here (not redirected) so a backend error can fall back to the
+    // vCard download instead of surfacing a raw error to the visitor.
+    try {
+      const passRes = await fetch(`${apiBase}/api/v1/profiles/${profile.id}/wallet/apple`, { cache: "no-store" });
+      if (passRes.ok) {
+        const buffer = await passRes.arrayBuffer();
+        return new NextResponse(buffer, {
+          status: 200,
+          headers: {
+            "Content-Type": passRes.headers.get("content-type") ?? "application/vnd.apple.pkpass",
+            "Content-Disposition":
+              passRes.headers.get("content-disposition") ?? `attachment; filename="mdm-tapcard-${slug}.pkpass"`,
+          },
+        });
+      }
+    } catch {
+      // fall through to vCard fallback below
+    }
+    return vcardFallback();
   }
 
-  if (appleBase) {
-    return NextResponse.redirect(appendSlug(appleBase, slug));
+  if (isAndroid(ua)) {
+    // Same pattern: fetch server-side so a backend/config error falls back
+    // to the vCard download instead of redirecting to a broken save link.
+    try {
+      const passRes = await fetch(`${apiBase}/api/v1/profiles/${profile.id}/wallet/google`, { cache: "no-store" });
+      if (passRes.ok) {
+        const { saveUrl } = (await passRes.json()) as { saveUrl?: string };
+        if (saveUrl) {
+          return NextResponse.redirect(saveUrl);
+        }
+      }
+    } catch {
+      // fall through to vCard fallback below
+    }
+    return vcardFallback();
   }
 
-  if (googleBase) {
-    return NextResponse.redirect(appendSlug(googleBase, slug));
-  }
-
-  // Fallback: save contact if wallet providers are not configured yet.
-  return NextResponse.redirect(new URL(`/api/vcard/${slug}?download=1`, req.url));
+  return vcardFallback();
 }
+

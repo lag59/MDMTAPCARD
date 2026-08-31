@@ -48,17 +48,17 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Dashboard</h1>
+      <h1 className="mb-6 text-2xl font-bold text-slate-900">Dashboard</h1>
       {error ? (
-        <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-3">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 px-4 py-3">
           {error}
         </div>
       ) : null}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {cards.map((c) => (
-          <div key={c.label} className="bg-white rounded-xl shadow p-5 flex flex-col gap-1">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">{c.label}</p>
-            <p className="text-3xl font-bold text-slate-800">{c.value}</p>
+          <div key={c.label} className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm ring-1 ring-indigo-100/60 flex flex-col gap-1">
+            <p className="text-xs uppercase tracking-wide text-slate-500">{c.label}</p>
+            <p className="text-3xl font-bold text-slate-900">{c.value}</p>
           </div>
         ))}
       </div>

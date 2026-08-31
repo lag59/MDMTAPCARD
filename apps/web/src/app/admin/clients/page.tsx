@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { grantComplimentaryNfc, listAdminCompanies } from "@/lib/api";
+import { apiPatch, grantComplimentaryNfc, listAdminCompanies, listReusableTemplates, type ImportedTemplate } from "@/lib/api";
 
 type Company = {
   id: string;
@@ -10,6 +10,7 @@ type Company = {
   subscription_plan: string;
   status: string;
   renewal_date: string | null;
+  default_template_id?: string | null;
   complimentary_nfc_cards?: number;
   complimentary_nfc_expires_at?: string | null;
 };
@@ -30,6 +31,9 @@ export default function ClientsPage() {
   const [grantingCompanyId, setGrantingCompanyId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<ImportedTemplate[]>([]);
+  const [editing, setEditing] = useState<Company | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -49,6 +53,7 @@ export default function ClientsPage() {
     };
 
     load();
+    listReusableTemplates().then(setTemplates).catch(() => setTemplates([]));
     return () => {
       mounted = false;
     };
@@ -59,6 +64,21 @@ export default function ClientsPage() {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleDateString();
+  };
+
+  const saveCompany = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      await apiPatch(`/api/v1/admin/companies/${editing.id}`, {
+        name: editing.name, subscription_plan: editing.subscription_plan, status: editing.status,
+        renewal_date: editing.renewal_date || null, default_template_id: editing.default_template_id || null,
+      });
+      setCompanies((all) => all.map((company) => company.id === editing.id ? editing : company));
+      setEditing(null);
+      setSuccess(`Updated ${editing.name}.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not update client."); }
+    finally { setSaving(false); }
   };
 
   const isBundlePlan = (plan: string) => {
@@ -139,6 +159,13 @@ export default function ClientsPage() {
                   <td className="px-4 py-3">
                     <button
                       type="button"
+                      onClick={() => setEditing({ ...company })}
+                      className="mr-2 rounded-md border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
                       disabled={!isBundlePlan(company.subscription_plan) || grantingCompanyId === company.id}
                       onClick={() => addComplimentaryCard(company)}
                       className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -153,6 +180,19 @@ export default function ClientsPage() {
           </tbody>
         </table>
       </div>
+      {editing ? (
+        <div className="mt-6 max-w-2xl rounded-xl bg-white p-5 shadow">
+          <h2 className="text-lg font-semibold text-slate-800">Edit Client</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm" placeholder="Client name" />
+            <select value={editing.subscription_plan} onChange={(e) => setEditing({ ...editing, subscription_plan: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm">{Object.entries(PLAN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+            <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm"><option value="active">Active</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
+            <input type="date" value={editing.renewal_date?.slice(0, 10) ?? ""} onChange={(e) => setEditing({ ...editing, renewal_date: e.target.value ? new Date(`${e.target.value}T00:00:00Z`).toISOString() : null })} className="rounded border border-slate-300 px-3 py-2 text-sm" />
+            <select value={editing.default_template_id ?? ""} onChange={(e) => setEditing({ ...editing, default_template_id: e.target.value || null })} className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"><option value="">No default template</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select>
+          </div>
+          <div className="mt-4 flex gap-2"><button disabled={saving} onClick={saveCompany} className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Saving…" : "Save changes"}</button><button onClick={() => setEditing(null)} className="rounded border border-slate-300 px-3 py-2 text-sm">Cancel</button></div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -42,9 +42,10 @@ interface Props {
   profileId: string;
   tagToken?: string;
   lang: "en" | "es";
+  lightBackground: boolean;
 }
 
-export default function LeadForm({ profileId, tagToken, lang }: Props) {
+export default function LeadForm({ profileId, tagToken, lang, lightBackground }: Props) {
   const c = copy[lang];
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [otpCode, setOtpCode] = useState("");
@@ -118,8 +119,17 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
   }
 
   if (status === "done") {
-    return <p className="text-green-400 text-sm text-center py-2">{c.success}</p>;
+    return <p className={`${lightBackground ? "text-emerald-700" : "text-emerald-300"} text-sm text-center py-2`}>{c.success}</p>;
   }
+
+  const inputClass = lightBackground
+    ? "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black placeholder-slate-500 outline-none focus:ring-2 focus:ring-slate-500/30"
+    : "rounded-lg border border-white/30 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/70 outline-none focus:ring-2 focus:ring-white/30";
+  const secondaryButtonClass = lightBackground
+    ? "rounded-lg border border-slate-300 px-3 py-2 text-xs text-black hover:bg-slate-100 disabled:opacity-50"
+    : "rounded-lg border border-white/30 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50";
+  const labelClass = lightBackground ? "text-xs text-slate-700" : "text-xs text-white/85";
+  const errorClass = lightBackground ? "text-rose-700" : "text-red-300";
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -128,14 +138,14 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
         placeholder={c.name}
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
+        className={inputClass}
       />
       <input
         type="email"
         placeholder={c.email}
         value={form.email}
         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-        className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
+        className={inputClass}
       />
       <input
         type="tel"
@@ -151,14 +161,14 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
           setOtpDebugCode(null);
           setOtpError(null);
         }}
-        className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
+        className={inputClass}
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={handleSendCode}
           disabled={sendingOtp || !form.phone.trim()}
-          className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+          className={secondaryButtonClass}
         >
           {sendingOtp ? "…" : c.sendCode}
         </button>
@@ -172,13 +182,13 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
             value={otpCode}
             onChange={(e) => setOtpCode(e.target.value)}
             placeholder={c.code}
-            className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30"
+            className={inputClass}
           />
           <button
             type="button"
             onClick={handleVerifyCode}
             disabled={verifyingOtp || !otpCode.trim()}
-            className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+            className={secondaryButtonClass}
           >
             {verifyingOtp ? "…" : c.verifyCode}
           </button>
@@ -187,15 +197,15 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
       {otpDebugCode ? (
         <p className="text-[11px] text-amber-200">{c.mockCode}: {otpDebugCode}</p>
       ) : null}
-      {otpError ? <p className="text-red-400 text-xs">{otpError}</p> : null}
+      {otpError ? <p className={`${errorClass} text-xs`}>{otpError}</p> : null}
       <textarea
         rows={3}
         placeholder={c.message}
         value={form.message}
         onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
-        className="rounded-lg bg-white/10 px-3 py-2 text-sm placeholder-slate-400 outline-none focus:ring-2 focus:ring-white/30 resize-none"
+        className={`${inputClass} resize-none`}
       />
-      <label className="flex items-start gap-2 text-xs text-slate-200">
+      <label className={`flex items-start gap-2 ${labelClass}`}>
         <input
           type="checkbox"
           checked={form.consent_to_contact}
@@ -204,11 +214,11 @@ export default function LeadForm({ profileId, tagToken, lang }: Props) {
         />
         <span>{c.consent}</span>
       </label>
-      {status === "error" && <p className="text-red-400 text-xs">{c.error}</p>}
+      {status === "error" && <p className={`${errorClass} text-xs`}>{c.error}</p>}
       <button
         type="submit"
         disabled={status === "sending" || !form.name.trim() || (!form.phone.trim() && !form.email.trim()) || !form.consent_to_contact}
-        className="rounded-xl bg-blue-600 py-2 font-semibold text-sm hover:bg-blue-700 transition disabled:opacity-50"
+        className="rounded-xl bg-blue-600 py-2 font-semibold text-sm text-white hover:bg-blue-700 transition disabled:opacity-50"
       >
         {status === "sending" ? "…" : c.send}
       </button>

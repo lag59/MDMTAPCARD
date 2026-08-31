@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Profile } from "@/lib/types";
-import { apiBaseUrl, trackEvent } from "@/lib/api";
+import { trackEvent } from "@/lib/api";
 import { resolveTemplate, type LayoutId, type Palette } from "@/lib/templates";
 import ContactButtons from "./ContactButtons";
 import SocialLinks from "./SocialLinks";
@@ -12,7 +12,8 @@ const i18n = {
   en: {
     saveContact: "Save Contact",
     saveFallback: "Having trouble saving? Download .VCF",
-    addToWallet: "Add to Wallet",
+    addToAppleWallet: "Add to Apple Wallet",
+    addToGoogleWallet: "Add to Google Wallet",
     contactInfo: "Contact Info",
     phone: "Phone",
     email: "Email",
@@ -29,7 +30,8 @@ const i18n = {
   es: {
     saveContact: "Guardar Contacto",
     saveFallback: "¿Problemas para guardar? Descarga .VCF",
-    addToWallet: "Agregar a Wallet",
+    addToAppleWallet: "Agregar a Apple Wallet",
+    addToGoogleWallet: "Add to Google Wallet",
     contactInfo: "Información de Contacto",
     phone: "Teléfono",
     email: "Correo",
@@ -55,23 +57,23 @@ interface Props {
 export default function ProfileCard({ profile, tagToken, preview = false }: Props) {
   const lang = (profile.language === "es" ? "es" : "en") as "en" | "es";
   const copy = i18n[lang];
-  const { layout, palette, backgroundImage } = resolveTemplate(profile);
+  const { layout, palette, backgroundImage, backgroundPosition, backgroundSize, backgroundOpacity, overlayColor, overlayOpacity, textColor } = resolveTemplate(profile);
   const [showForm, setShowForm] = useState(false);
 
-  const paletteSurface = `${palette.bg} ${palette.glass}`.toLowerCase();
-  const paletteText = `${palette.text} ${palette.sub}`.toLowerCase();
-  const looksLightSurface = /(bg-white|from-white|to-white|via-white|slate-50|slate-100|neutral-50|zinc-50)/.test(
-    paletteSurface
+  const paletteBackground = palette.bg.toLowerCase();
+  const isLightBackground = /(bg-white|from-white|to-white|via-white|slate-(50|100|200)|gray-(50|100|200)|neutral-(50|100|200)|zinc-(50|100|200))/.test(
+    paletteBackground
   );
-  const asksForWhiteText = /text-white/.test(paletteText);
-  const useHighContrastDarkText = looksLightSurface && asksForWhiteText;
 
-  const textClass = useHighContrastDarkText ? "text-slate-900" : palette.text;
-  const subClass = useHighContrastDarkText ? "text-slate-600" : palette.sub;
-  const inquiryClass = useHighContrastDarkText
+  // A template-configured text color always wins so entered text matches the design; it
+  // cascades to descendants via CSS inheritance, so the color-only classes are cleared.
+  const textClass = textColor ? "" : isLightBackground ? "text-black" : "text-white";
+  const subClass = textColor ? "" : isLightBackground ? "text-slate-600" : "text-white/80";
+  const contentTextStyle = textColor ? { color: textColor } : undefined;
+  const inquiryClass = isLightBackground
     ? "border border-slate-300 text-slate-800 hover:bg-slate-100"
     : palette.inquiry;
-  const sectionCardClass = useHighContrastDarkText
+  const sectionCardClass = isLightBackground
     ? "bg-white/90 border border-slate-200 shadow-sm"
     : palette.glass;
 
@@ -93,7 +95,9 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   const vcardUrl = `/api/vcard/${profile.slug}`;
   const vcardDownloadUrl = `/api/vcard/${profile.slug}?download=1`;
   const walletUrl = `/api/wallet/${profile.slug}`;
-  const qrUrl = `${apiBaseUrl}/api/v1/profiles/qr/${profile.slug}`;
+  const isAndroidUA = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+  const walletLabel = isAndroidUA ? copy.addToGoogleWallet : copy.addToAppleWallet;
+  const qrUrl = `/api/proxy/api/v1/profiles/qr/${profile.slug}`;
   const initials = profile.display_name
     .split(" ")
     .slice(0, 2)
@@ -256,7 +260,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       )}
 
       <div className={`${sectionCardClass} rounded-2xl p-4`}>
-        <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={useHighContrastDarkText} />
+        <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={isLightBackground} />
       </div>
 
       <a
@@ -280,7 +284,7 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
             <rect x="2" y="6" width="20" height="14" rx="2" />
             <line x1="2" y1="10" x2="22" y2="10" />
           </svg>
-          {copy.addToWallet}
+          {walletLabel}
         </a>
       )}
 
@@ -388,18 +392,32 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       >
         {copy.inquiry}
       </button>
-      {showForm && !preview && <LeadForm profileId={profile.id} tagToken={tagToken} lang={lang} />}
+      {showForm && !preview && <LeadForm profileId={profile.id} tagToken={tagToken} lang={lang} lightBackground={isLightBackground} />}
     </div>
   );
 
-  const bgStyle = backgroundImage
-    ? { backgroundImage: `url(${backgroundImage})`, backgroundSize: "cover", backgroundPosition: "center" }
-    : undefined;
   const bgClass = backgroundImage ? "" : palette.bg;
 
   return (
-    <main className={`min-h-screen ${bgClass} flex justify-center pb-16`} style={bgStyle}>
-      <div className="w-full max-w-sm">
+    <main className={`relative min-h-screen ${bgClass} flex justify-center pb-16`}>
+      {backgroundImage ? (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: `url(${backgroundImage})`,
+            backgroundSize: backgroundSize ?? "cover",
+            backgroundPosition: backgroundPosition ?? "center",
+            opacity: backgroundOpacity ?? 1,
+          }}
+        />
+      ) : null}
+      {overlayColor ? (
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: overlayColor, opacity: overlayOpacity ?? 0 }}
+        />
+      ) : null}
+      <div className="relative w-full max-w-sm" style={contentTextStyle}>
         {header}
         {body}
         <p className={`text-center text-xs ${subClass} opacity-40 mt-8 mb-4`}>Powered by MDM TapCard</p>

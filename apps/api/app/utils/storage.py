@@ -36,3 +36,22 @@ def save_public_asset(key: str, data: bytes, content_type: str = "application/oc
         f.write(data)
     return f"{settings.API_PUBLIC_URL.rstrip('/')}/{settings.UPLOAD_DIR}/{key}"
 
+
+def delete_public_asset(key: str) -> None:
+    """Best-effort delete of a previously saved asset. Never raises."""
+    if not key:
+        return
+    if settings.STORAGE_BUCKET:
+        try:
+            _client().delete_object(Bucket=settings.STORAGE_BUCKET, Key=key)
+        except Exception:
+            pass
+        return
+
+    path = os.path.join(settings.UPLOAD_DIR, key)
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+

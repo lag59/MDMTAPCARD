@@ -261,11 +261,34 @@ export function getTemplateById(id?: string | null): CardTemplate {
   return TEMPLATES.find((t) => t.id === DEFAULT_TEMPLATE_ID)!;
 }
 
-/** Resolves the effective template + palette for a profile, honoring custom uploads. */
-export function resolveTemplate(profile: { theme_id?: string | null; custom_theme?: string | null }): {
+/** Resolves the effective template + palette for a profile, honoring custom uploads
+ * and shared admin-managed template backgrounds. */
+export function resolveTemplate(profile: {
+  theme_id?: string | null;
+  custom_theme?: string | null;
+  template_background?: {
+    image_url: string | null;
+    position: string;
+    size_mode: "cover" | "contain";
+    opacity: number;
+    overlay_color: string | null;
+    overlay_opacity: number;
+    text_color?: string | null;
+  } | null;
+  template_definition?: {
+    layout: LayoutId;
+    palette: Palette;
+  } | null;
+}): {
   layout: LayoutId;
   palette: Palette;
   backgroundImage?: string;
+  backgroundPosition?: string;
+  backgroundSize?: "cover" | "contain";
+  backgroundOpacity?: number;
+  overlayColor?: string | null;
+  overlayOpacity?: number;
+  textColor?: string | null;
 } {
   if (profile.theme_id === "custom" && profile.custom_theme) {
     try {
@@ -277,6 +300,25 @@ export function resolveTemplate(profile: { theme_id?: string | null; custom_them
       // fall through to default
     }
   }
-  const template = getTemplateById(profile.theme_id);
+  const template = profile.template_definition
+    ? { layout: profile.template_definition.layout, palette: profile.template_definition.palette }
+    : getTemplateById(profile.theme_id);
+  const shared = profile.template_background;
+  if (shared?.image_url) {
+    return {
+      layout: template.layout,
+      palette: template.palette,
+      backgroundImage: shared.image_url,
+      backgroundPosition: shared.position,
+      backgroundSize: shared.size_mode,
+      backgroundOpacity: shared.opacity,
+      overlayColor: shared.overlay_color,
+      overlayOpacity: shared.overlay_opacity,
+      textColor: shared.text_color,
+    };
+  }
+  if (shared?.text_color) {
+    return { layout: template.layout, palette: template.palette, textColor: shared.text_color };
+  }
   return { layout: template.layout, palette: template.palette };
 }

@@ -31,3 +31,6 @@ Thumbs.db
 
 # ChangAIs reports (auto-generated)
 .changais/
+
+.vercel
+.env*

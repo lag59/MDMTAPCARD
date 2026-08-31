@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TemplatePreview from "./TemplatePreview";
 import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
-import { uploadLogo } from "@/lib/api";
+import { apiGet, listReusableTemplates, uploadLogo, type ImportedTemplate } from "@/lib/api";
 
 const PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "youtube"] as const;
 
@@ -62,7 +62,16 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [reusableTemplates, setReusableTemplates] = useState<ImportedTemplate[]>([]);
   const customFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    apiGet<{ role: string }>("/api/v1/admin/me")
+      .then((user) => setIsSuperAdmin(user.role === "super_admin"))
+      .catch(() => setIsSuperAdmin(false));
+    listReusableTemplates().then(setReusableTemplates).catch(() => setReusableTemplates([]));
+  }, []);
 
   const set =
     (key: keyof CardFormValues) =>
@@ -84,8 +93,8 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
   const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file for the logo.");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Please choose a JPG, PNG, or WebP profile photo.");
       return;
     }
     setUploadingLogo(true);
@@ -172,13 +181,13 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
           <input className={input} value={values.title} onChange={set("title")} />
         </div>
         <div className="md:col-span-2">
-          <label className={label}>Logo / Profile Image (optional)</label>
+          <label className={label}>Profile Photo (optional)</label>
           <div className="flex flex-col md:flex-row gap-3">
             <input className={input} placeholder="Paste image URL" value={values.photo_url} onChange={set("photo_url")} />
-            <input type="file" accept="image/*" onChange={handleLogoFile} disabled={uploadingLogo} className="block text-sm text-slate-600" />
+            <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleLogoFile} disabled={uploadingLogo} className="block text-sm text-slate-600" />
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            {uploadingLogo ? "Uploading…" : "Upload a logo/image or paste a URL. If none is set, the card shows initials automatically."}
+            {uploadingLogo ? "Uploading…" : "Upload a JPG, PNG, or WebP photo, or paste an image URL. If none is set, the card shows initials automatically."}
           </p>
           {values.photo_url ? (
             <div className="mt-3 flex items-center gap-3">
@@ -248,13 +257,15 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
           <div className="flex items-center justify-between mb-2">
             <label className={label}>Card Template</label>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => customFileRef.current?.click()}
-                className="text-xs font-medium text-blue-600 hover:underline"
-              >
-                Upload custom…
-              </button>
+              {isSuperAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => customFileRef.current?.click()}
+                  className="text-xs font-medium text-blue-600 hover:underline"
+                >
+                  Upload custom…
+                </button>
+              ) : null}
               <a href="/admin/templates" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:underline">
                 Browse gallery ↗
               </a>
@@ -268,6 +279,37 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
             className="hidden"
           />
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {reusableTemplates.map((template) => (
+              <div
+                key={template.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setValues((v) => ({ ...v, theme_id: template.id, custom_theme: "" }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setValues((v) => ({ ...v, theme_id: template.id, custom_theme: "" }));
+                  }
+                }}
+                className={`cursor-pointer rounded-lg border p-1.5 text-left transition ${
+                  values.theme_id === template.id ? "border-blue-500 ring-2 ring-blue-200" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <TemplatePreview
+                  overrides={{
+                    theme_id: template.id,
+                    template_definition: { id: template.id, name: template.name, layout: template.layout, palette: template.palette, branding: template.branding, locked: template.locked },
+                    template_background: template.background,
+                    display_name: values.display_name || "Alex Rivera",
+                    title: values.title,
+                    photo_url: values.photo_url,
+                  }}
+                  width={120}
+                  height={180}
+                />
+                <div className="mt-1 text-[11px] font-medium text-slate-700 truncate">{template.name}</div>
+              </div>
+            ))}
             {values.theme_id === "custom" && values.custom_theme && (
               <div className="rounded-lg border border-blue-500 ring-2 ring-blue-200 p-1.5 text-left">
                 <TemplatePreview

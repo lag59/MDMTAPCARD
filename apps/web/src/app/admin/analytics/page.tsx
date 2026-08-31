@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { apiGet } from "@/lib/api";
 
 type AnalyticsOverview = {
+  company_id?: string | null;
+  company_name?: string | null;
   total_taps: number;
   total_leads: number;
   conversion_rate: number;
@@ -51,7 +53,10 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Analytics</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-slate-800">Analytics</h1>
+        <p className="mt-1 text-sm text-slate-500">{data?.company_name ? `Showing activity for ${data.company_name}.` : "Showing activity across all companies."}</p>
+      </div>
       {error ? (
         <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-3">{error}</div>
       ) : null}

@@ -527,13 +527,14 @@ async def resolve_public_tag(
     public_token: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    tag_row = (
+    row = (
         await db.execute(
             text(
                 """
-                SELECT id, profile_id, status
+                SELECT nfc_tags.status AS tag_status, profiles.slug AS profile_slug, profiles.is_active AS profile_is_active
                 FROM nfc_tags
-                WHERE tag_token = :token
+                LEFT JOIN profiles ON profiles.id = nfc_tags.profile_id
+                WHERE nfc_tags.tag_token = :token
                 LIMIT 1
                 """
             ),
@@ -541,45 +542,15 @@ async def resolve_public_tag(
         )
     ).mappings().first()
 
-    if not tag_row:
+    if not row:
         raise HTTPException(status_code=404, detail="Tag not found")
 
-    status_value = str(tag_row.get("status") or "")
-    if status_value != NfcTagStatus.verified.value:
+    status_value = str(row.get("tag_status") or "")
+    profile_slug = str(row.get("profile_slug") or "").strip()
+    if status_value != NfcTagStatus.verified.value or not profile_slug or not bool(row.get("profile_is_active")):
         return {
             "active": False,
             "message": "This NFC card or button is no longer active.",
         }
 
-    profile_row = (
-        await db.execute(
-            text(
-                """
-                SELECT slug, is_active
-                FROM profiles
-                WHERE id = :profile_id
-                LIMIT 1
-                """
-            ),
-            {"profile_id": tag_row.get("profile_id")},
-        )
-    ).mappings().first()
-
-    if not profile_row or not bool(profile_row.get("is_active")):
-        return {
-            "active": False,
-            "message": "This NFC card or button is no longer active.",
-        }
-
-    profile_slug = str(profile_row.get("slug") or "").strip()
-    if not profile_slug:
-        return {
-            "active": False,
-            "message": "This NFC card or button is no longer active.",
-        }
-
-    return {
-        "active": True,
-        "slug": profile_slug,
-        "redirect_url": f"{settings.PROFILE_BASE_URL}/c/{profile_slug}",
-    }
+    return {"active": True, "slug": profile_slug}

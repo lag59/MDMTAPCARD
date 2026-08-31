@@ -16,6 +16,8 @@ from app.models.events import Lead, TapEvent
 from app.models.nfc_tag import NfcTag
 from app.models.order import Order, OrderStatus, PaymentStatus
 from app.models.profile import Profile
+from app.models.signup_request import SignupRequest
+from app.models.template import Template
 from app.models.user import User, UserRole
 
 router = APIRouter()
@@ -26,6 +28,15 @@ AdminOrOwner = Depends(require_roles(UserRole.super_admin, UserRole.business_own
 
 class CompanyCreate(BaseModel):
     name: str
+    default_template_id: str | None = None
+
+
+class CompanyUpdate(BaseModel):
+    name: str | None = None
+    default_template_id: str | None = None
+    subscription_plan: SubscriptionPlan | None = None
+    status: str | None = None
+    renewal_date: datetime | None = None
 
 
 class UserCreate(BaseModel):
@@ -34,6 +45,15 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole
     company_id: uuid.UUID | None = None
+
+
+class UserUpdate(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    password: str | None = None
+    role: UserRole | None = None
+    company_id: uuid.UUID | None = None
+    is_active: bool | None = None
 
 
 class ComplimentaryNfcGrantRequest(BaseModel):
@@ -89,12 +109,25 @@ class SchemaRepairResponse(BaseModel):
     message: str
 
 
+class SignupRequestStatusUpdate(BaseModel):
+    status: str
+
+
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
     return plan in {
         SubscriptionPlan.basic_monthly,
         SubscriptionPlan.basic_yearly,
         SubscriptionPlan.pro_monthly,
         SubscriptionPlan.pro_yearly,
+        SubscriptionPlan.tap_business,
+        SubscriptionPlan.tap_team,
+        SubscriptionPlan.tap_pro,
+    }
+
+
+def _is_legacy_plan(plan: SubscriptionPlan) -> bool:
+    return plan in {
+        SubscriptionPlan.tap_starter,
         SubscriptionPlan.tap_business,
         SubscriptionPlan.tap_team,
         SubscriptionPlan.tap_pro,
@@ -108,6 +141,157 @@ def _square_base_url() -> str:
     if env == "production":
         return "https://connect.squareup.com"
     return "https://connect.squareupsandbox.com"
+
+
+class ShippingLabelResponse(BaseModel):
+    request_id: str
+    carrier: str
+    service: str
+    tracking_number: str
+    tracking_url: str | None
+    label_url: str
+    cost_cents: int | None
+
+
+async def _create_shippo_label(request: SignupRequest) -> ShippingLabelResponse:
+    if not settings.SHIPPO_API_TOKEN:
+        raise HTTPException(status_code=400, detail="Shippo is not configured. Set SHIPPO_API_TOKEN.")
+
+    missing_ship_from = [
+        key
+        for key, value in {
+            "SHIP_FROM_STREET1": settings.SHIP_FROM_STREET1,
+            "SHIP_FROM_CITY": settings.SHIP_FROM_CITY,
+            "SHIP_FROM_STATE": settings.SHIP_FROM_STATE,
+            "SHIP_FROM_ZIP": settings.SHIP_FROM_ZIP,
+        }.items()
+        if not value
+    ]
+    if missing_ship_from:
+        raise HTTPException(status_code=400, detail=f"Ship-from address is not configured: {', '.join(missing_ship_from)}")
+
+    missing_ship_to = [
+        key
+        for key, value in {
+            "shipping_name": request.shipping_name,
+            "shipping_address1": request.shipping_address1,
+            "shipping_city": request.shipping_city,
+            "shipping_state": request.shipping_state,
+            "shipping_postal_code": request.shipping_postal_code,
+            "shipping_country": request.shipping_country,
+        }.items()
+        if not value
+    ]
+    if missing_ship_to:
+        raise HTTPException(status_code=400, detail=f"Signup request is missing shipping fields: {', '.join(missing_ship_to)}")
+
+    headers = {
+        "Authorization": f"ShippoToken {settings.SHIPPO_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    base_url = settings.SHIPPO_API_BASE_URL.rstrip("/")
+
+    shipment_payload = {
+        "address_from": {
+            "name": settings.SHIP_FROM_NAME,
+            "company": settings.SHIP_FROM_COMPANY,
+            "street1": settings.SHIP_FROM_STREET1,
+            "street2": settings.SHIP_FROM_STREET2 or None,
+            "city": settings.SHIP_FROM_CITY,
+            "state": settings.SHIP_FROM_STATE,
+            "zip": settings.SHIP_FROM_ZIP,
+            "country": settings.SHIP_FROM_COUNTRY,
+            "phone": settings.SHIP_FROM_PHONE or None,
+            "email": settings.SHIP_FROM_EMAIL or None,
+        },
+        "address_to": {
+            "name": request.shipping_name,
+            "company": request.shipping_company or None,
+            "street1": request.shipping_address1,
+            "street2": request.shipping_address2 or None,
+            "city": request.shipping_city,
+            "state": request.shipping_state,
+            "zip": request.shipping_postal_code,
+            "country": request.shipping_country,
+            "phone": request.phone or None,
+            "email": request.email,
+        },
+        "parcels": [
+            {
+                "length": str(settings.SHIP_PARCEL_LENGTH_IN),
+                "width": str(settings.SHIP_PARCEL_WIDTH_IN),
+                "height": str(settings.SHIP_PARCEL_HEIGHT_IN),
+                "distance_unit": "in",
+                "weight": str(settings.SHIP_PARCEL_WEIGHT_OZ),
+                "mass_unit": "oz",
+            }
+        ],
+        "async": False,
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            shipment_res = await client.post(f"{base_url}/shipments/", json=shipment_payload, headers=headers)
+            shipment_res.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=502, detail="Shippo shipment request failed") from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail="Could not reach Shippo API") from exc
+
+        shipment_data = shipment_res.json()
+        # Shippo rate objects don't carry an object_state field; every entry
+        # returned in "rates" is already a valid, purchasable quote.
+        rates = [r for r in shipment_data.get("rates", []) if not r.get("messages")]
+        if not rates:
+            raise HTTPException(status_code=502, detail="Shippo returned no valid shipping rates for this address")
+        cheapest_rate = min(rates, key=lambda r: float(r["amount"]))
+
+        transaction_payload = {
+            "rate": cheapest_rate["object_id"],
+            "label_file_type": "PDF",
+            "async": False,
+        }
+        try:
+            transaction_res = await client.post(f"{base_url}/transactions/", json=transaction_payload, headers=headers)
+            transaction_res.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=502, detail="Shippo label purchase failed") from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail="Could not reach Shippo API") from exc
+
+        transaction_data = transaction_res.json()
+
+    if transaction_data.get("status") != "SUCCESS":
+        messages = transaction_data.get("messages") or []
+        detail = messages[0].get("text") if messages and isinstance(messages[0], dict) else "Label purchase did not succeed"
+        raise HTTPException(status_code=502, detail=str(detail))
+
+    label_url = transaction_data.get("label_url")
+    tracking_number = transaction_data.get("tracking_number")
+    if not label_url or not tracking_number:
+        raise HTTPException(status_code=502, detail="Invalid Shippo transaction response")
+
+    request.shippo_shipment_id = str(shipment_data.get("object_id") or "")
+    request.shippo_transaction_id = str(transaction_data.get("object_id") or "")
+    request.shipping_carrier = str(cheapest_rate.get("provider") or "")
+    request.shipping_service = str((cheapest_rate.get("servicelevel") or {}).get("name") or "")
+    request.shipping_label_url = str(label_url)
+    request.shipping_tracking_number = str(tracking_number)
+    request.shipping_tracking_url = transaction_data.get("tracking_url_provider")
+    try:
+        request.shipping_cost_cents = round(float(cheapest_rate["amount"]) * 100)
+    except (TypeError, ValueError, KeyError):
+        request.shipping_cost_cents = None
+
+    return ShippingLabelResponse(
+        request_id=str(request.id),
+        carrier=request.shipping_carrier or "",
+        service=request.shipping_service or "",
+        tracking_number=request.shipping_tracking_number or "",
+        tracking_url=request.shipping_tracking_url,
+        label_url=request.shipping_label_url or "",
+        cost_cents=request.shipping_cost_cents,
+    )
 
 
 @router.get("/dashboard")
@@ -173,7 +357,22 @@ async def schema_repair(
               email VARCHAR(255) NOT NULL,
               phone VARCHAR(50) NULL,
               plan_interest VARCHAR(50) NULL,
+                            service_interest VARCHAR(80) NULL,
               team_size VARCHAR(50) NULL,
+                            quantity INTEGER NULL,
+                            shipping_name VARCHAR(255) NULL,
+                            shipping_company VARCHAR(255) NULL,
+                            shipping_address1 VARCHAR(255) NULL,
+                            shipping_address2 VARCHAR(255) NULL,
+                            shipping_city VARCHAR(120) NULL,
+                            shipping_state VARCHAR(120) NULL,
+                            shipping_postal_code VARCHAR(40) NULL,
+                            shipping_country VARCHAR(2) NULL,
+                            amount_cents INTEGER NULL,
+                            currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+                            payment_required BOOLEAN NOT NULL DEFAULT FALSE,
+                            square_checkout_url TEXT NULL,
+                            square_payment_link_id VARCHAR(80) NULL,
               notes TEXT NULL,
               status VARCHAR(30) NOT NULL DEFAULT 'new',
               created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -182,6 +381,21 @@ async def schema_repair(
         )
     )
     await db.execute(text("CREATE INDEX IF NOT EXISTS ix_signup_requests_email ON signup_requests(email)"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS service_interest VARCHAR(80) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS quantity INTEGER NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_name VARCHAR(255) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_company VARCHAR(255) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_address1 VARCHAR(255) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_address2 VARCHAR(255) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_city VARCHAR(120) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_state VARCHAR(120) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_postal_code VARCHAR(40) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_country VARCHAR(2) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS amount_cents INTEGER NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'USD'"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS payment_required BOOLEAN NOT NULL DEFAULT FALSE"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_checkout_url TEXT NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_payment_link_id VARCHAR(80) NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL"))
@@ -257,7 +471,9 @@ async def create_company(
     _: Annotated[User, SuperAdmin],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    company = Company(name=body.name)
+    if body.default_template_id and not await db.get(Template, body.default_template_id):
+        raise HTTPException(status_code=400, detail="Selected default template was not found")
+    company = Company(name=body.name.strip(), default_template_id=body.default_template_id)
     db.add(company)
     await db.commit()
     await db.refresh(company)
@@ -274,6 +490,42 @@ async def list_companies(
         query = query.where(Company.id == current_user.company_id)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.patch("/companies/{company_id}")
+async def update_company(
+    company_id: uuid.UUID,
+    body: CompanyUpdate,
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str | None]:
+    company = await db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+    updates = body.model_dump(exclude_unset=True)
+    if "name" in updates and not str(updates["name"] or "").strip():
+        raise HTTPException(status_code=400, detail="Company name cannot be blank")
+    if "default_template_id" in updates and updates["default_template_id"]:
+        if not await db.get(Template, updates["default_template_id"]):
+            raise HTTPException(status_code=400, detail="Selected default template was not found")
+    if "status" in updates:
+        try:
+            from app.models.company import CompanyStatus
+            updates["status"] = CompanyStatus(updates["status"])
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid company status") from exc
+    for field, value in updates.items():
+        setattr(company, field, value.strip() if field == "name" else value)
+    await db.commit()
+    await db.refresh(company)
+    return {
+        "id": str(company.id),
+        "name": company.name,
+        "default_template_id": company.default_template_id,
+        "subscription_plan": company.subscription_plan.value,
+        "status": company.status.value,
+        "renewal_date": company.renewal_date.isoformat() if company.renewal_date else None,
+    }
 
 
 @router.post("/companies/{company_id}/complimentary-nfc", response_model=ComplimentaryNfcGrantResponse)
@@ -340,6 +592,7 @@ async def list_profiles(
             Profile.id,
             Profile.display_name,
             Profile.title,
+            Profile.card_type,
             Profile.slug,
             Profile.email,
             Profile.phone,
@@ -366,6 +619,7 @@ async def list_profiles(
             "id": str(row.id),
             "display_name": row.display_name,
             "title": row.title,
+            "card_type": row.card_type,
             "slug": row.slug,
             "email": row.email,
             "phone": row.phone,
@@ -431,6 +685,101 @@ async def list_leads(
         }
         for row in rows
     ]
+
+
+@router.get("/signup-requests")
+async def list_signup_requests(
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, str | int | bool | None]]:
+    rows = (
+        await db.execute(
+            select(SignupRequest)
+            .order_by(SignupRequest.created_at.desc())
+            .limit(500)
+        )
+    ).scalars().all()
+
+    fulfillment_services = {"physical_tap_card", "physical_tap_card_with_design", "tap_button_for_phone"}
+
+    return [
+        {
+            "id": str(row.id),
+            "company_name": row.company_name,
+            "contact_name": row.contact_name,
+            "email": row.email,
+            "phone": row.phone,
+            "plan_interest": row.plan_interest,
+            "service_interest": row.service_interest,
+            "team_size": row.team_size,
+            "quantity": row.quantity,
+            "shipping_name": row.shipping_name,
+            "shipping_company": row.shipping_company,
+            "shipping_address1": row.shipping_address1,
+            "shipping_address2": row.shipping_address2,
+            "shipping_city": row.shipping_city,
+            "shipping_state": row.shipping_state,
+            "shipping_postal_code": row.shipping_postal_code,
+            "shipping_country": row.shipping_country,
+            "amount_cents": row.amount_cents,
+            "currency": row.currency,
+            "payment_required": bool(row.payment_required),
+            "square_checkout_url": row.square_checkout_url,
+            "square_payment_link_id": row.square_payment_link_id,
+            "shippo_shipment_id": row.shippo_shipment_id,
+            "shippo_transaction_id": row.shippo_transaction_id,
+            "shipping_carrier": row.shipping_carrier,
+            "shipping_service": row.shipping_service,
+            "shipping_label_url": row.shipping_label_url,
+            "shipping_tracking_number": row.shipping_tracking_number,
+            "shipping_tracking_url": row.shipping_tracking_url,
+            "shipping_cost_cents": row.shipping_cost_cents,
+            "notes": row.notes,
+            "status": row.status,
+            # Custom-design requests wait in "intake" until an admin quotes and
+            # approves them; only then do they move to the fulfillment queue.
+            "queue": "fulfillment" if row.service_interest in fulfillment_services and row.status != "design_request" else "intake",
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+
+@router.patch("/signup-requests/{request_id}")
+async def update_signup_request_status(
+    request_id: uuid.UUID,
+    body: SignupRequestStatusUpdate,
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    request = await db.get(SignupRequest, request_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Signup request not found")
+
+    status = body.status.strip().lower()
+    if status not in {"design_request", "new", "in_review", "approved", "fulfilled", "closed"}:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+    request.status = status
+    await db.commit()
+    return {"id": str(request.id), "status": request.status}
+
+
+@router.post("/signup-requests/{request_id}/shipping-label", response_model=ShippingLabelResponse)
+async def create_signup_request_shipping_label(
+    request_id: uuid.UUID,
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ShippingLabelResponse:
+    request = await db.get(SignupRequest, request_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Signup request not found")
+    if request.shipping_label_url:
+        raise HTTPException(status_code=400, detail="A shipping label was already created for this request")
+
+    result = await _create_shippo_label(request)
+    await db.commit()
+    return result
 
 
 @router.get("/orders")
@@ -507,6 +856,8 @@ async def create_order(
         raise HTTPException(status_code=400, detail="Seats must be at least 1")
     if body.amount_cents < 0:
         raise HTTPException(status_code=400, detail="Amount cannot be negative")
+    if current_user.role != UserRole.super_admin and _is_legacy_plan(body.plan):
+        raise HTTPException(status_code=403, detail="Legacy plans can only be assigned by super admins")
 
     company_id = body.company_id
     if current_user.role == UserRole.business_owner:
@@ -577,6 +928,13 @@ async def update_order(
         raise HTTPException(status_code=400, detail="Seats must be at least 1")
     if "amount_cents" in updates and updates["amount_cents"] is not None and updates["amount_cents"] < 0:
         raise HTTPException(status_code=400, detail="Amount cannot be negative")
+    if (
+        "plan" in updates
+        and updates["plan"] is not None
+        and current_user.role != UserRole.super_admin
+        and _is_legacy_plan(updates["plan"])
+    ):
+        raise HTTPException(status_code=403, detail="Legacy plans can only be assigned by super admins")
 
     for field, value in updates.items():
         if field == "currency" and isinstance(value, str):
@@ -719,6 +1077,55 @@ async def create_user(
     return {"id": str(user.id), "email": user.email, "role": user.role.value}
 
 
+@router.get("/users")
+async def list_users(
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, str | bool | None]]:
+    rows = (
+        await db.execute(select(User, Company.name.label("company_name")).outerjoin(Company, Company.id == User.company_id).order_by(User.created_at.desc()))
+    ).all()
+    return [{
+        "id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value,
+        "company_id": str(user.company_id) if user.company_id else None, "company_name": company_name,
+        "is_active": user.is_active, "is_deleted": user.is_deleted,
+    } for user, company_name in rows]
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    user_id: uuid.UUID,
+    body: UserUpdate,
+    current_user: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str | bool | None]:
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates = body.model_dump(exclude_unset=True)
+    if "name" in updates and not str(updates["name"] or "").strip():
+        raise HTTPException(status_code=400, detail="User name cannot be blank")
+    if "email" in updates:
+        email = str(updates["email"]).lower()
+        existing = (await db.execute(select(User).where(User.email == email, User.id != user.id))).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+        updates["email"] = email
+    if "company_id" in updates and updates["company_id"] and not await db.get(Company, updates["company_id"]):
+        raise HTTPException(status_code=404, detail="Company not found")
+    if "password" in updates:
+        password = updates.pop("password")
+        if password:
+            if len(password) < 8:
+                raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+            user.hashed_password = hash_password(password)
+    for field, value in updates.items():
+        setattr(user, field, value.strip() if field == "name" else value)
+    await db.commit()
+    await db.refresh(user)
+    return {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value, "company_id": str(user.company_id) if user.company_id else None, "is_active": user.is_active}
+
+
 @router.get("/my-company")
 async def my_company_summary(
     current_user: CurrentUser,
@@ -760,7 +1167,7 @@ async def my_company_summary(
 async def analytics_overview(
     current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, int | float | dict[str, int] | list[dict[str, str | int]]]:
+) -> dict[str, int | float | str | None | dict[str, int] | list[dict[str, str | int]]]:
     taps_base = select(TapEvent.id).join(Profile, Profile.id == TapEvent.profile_id)
     leads_base = select(Lead.id).join(Profile, Profile.id == Lead.profile_id)
 
@@ -824,7 +1231,14 @@ async def analytics_overview(
             }
         )
 
+    company_name = None
+    if current_user.role != UserRole.super_admin and current_user.company_id:
+        company = await db.get(Company, current_user.company_id)
+        company_name = company.name if company else None
+
     return {
+        "company_id": str(current_user.company_id) if current_user.role != UserRole.super_admin and current_user.company_id else None,
+        "company_name": company_name,
         "total_taps": total_taps,
         "total_leads": total_leads,
         "conversion_rate": round((total_leads / total_taps) * 100, 2) if total_taps > 0 else 0,

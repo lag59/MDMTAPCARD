@@ -1,4 +1,26 @@
+import type { LayoutId, Palette } from "./templates";
+
 // Shared API types used across the Next.js app
+
+export interface TemplateBackground {
+  image_url: string | null;
+  position: string;
+  size_mode: "cover" | "contain";
+  opacity: number;
+  overlay_color: string | null;
+  overlay_opacity: number;
+  text_color: string | null;
+  lock_background: boolean;
+}
+
+export interface TemplateDefinition {
+  id: string;
+  name: string;
+  layout: LayoutId;
+  palette: Palette;
+  branding: Record<string, string>;
+  locked: boolean;
+}
 
 export interface Profile {
   id: string;
@@ -21,6 +43,8 @@ export interface Profile {
   social_links: SocialLink[];
   profile_url: string;
   is_active: boolean;
+  template_background?: TemplateBackground | null;
+  template_definition?: TemplateDefinition | null;
 }
 
 export interface SocialLink {

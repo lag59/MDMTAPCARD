@@ -51,7 +51,13 @@ def _ensure_alembic_version_column_capacity(connection) -> None:
         )
     except Exception:
         # Best-effort safeguard; migration execution continues.
-        pass
+        if connection.in_transaction():
+            connection.rollback()
+    else:
+        # The metadata query and optional ALTER open a transaction. Complete it
+        # before Alembic opens the transaction that runs actual revisions.
+        if connection.in_transaction():
+            connection.commit()
 
 
 def run_migrations_offline() -> None:

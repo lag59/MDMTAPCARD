@@ -1,7 +1,10 @@
 import uuid
+from io import BytesIO
 from typing import Annotated, List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, status
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, EmailStr
 from slugify import slugify
 from sqlalchemy import select
@@ -10,7 +13,12 @@ from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, get_db, require_company_context, enforce_company_ownership
 from app.models.profile import Profile, SocialLink
+from app.models.company import Company
+from app.models.template import Template
+from app.models.template_background import TemplateBackground
 from app.models.user import UserRole
+from app.utils.apple_wallet import AppleWalletNotConfigured, build_pkpass
+from app.utils.google_wallet import GoogleWalletNotConfigured, build_save_url
 from app.utils.qr import generate_qr_bytes
 from app.utils.storage import save_public_asset
 
@@ -18,13 +26,20 @@ router = APIRouter()
 
 _ALLOWED_CARD_TYPES = {"digital_only", "nfc_card", "nfc_button"}
 
-_ALLOWED_LOGO_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/svg+xml": "svg", "image/gif": "gif"}
-_MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
+_ALLOWED_PROFILE_PHOTO_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+_MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 class SocialLinkIn(BaseModel):
     platform: str
     url: str
+
+
+class SocialLinkOut(SocialLinkIn):
+    id: uuid.UUID
+
+    class Config:
+        from_attributes = True
 
 
 class ProfileCreate(BaseModel):
@@ -49,15 +64,68 @@ class ProfileCreate(BaseModel):
     company_id: uuid.UUID | None = None
 
 
+class TemplateBackgroundInfo(BaseModel):
+    image_url: str | None = None
+    position: str = "center center"
+    size_mode: str = "cover"
+    opacity: float = 1.0
+    overlay_color: str | None = None
+    overlay_opacity: float = 0.0
+    text_color: str | None = None
+    lock_background: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateDefinitionInfo(BaseModel):
+    id: str
+    name: str
+    layout: str
+    palette: dict
+    branding: dict
+    locked: bool
+
+
 class ProfileOut(ProfileCreate):
     id: uuid.UUID
     slug: str
     photo_url: str | None = None
     is_active: bool
     profile_url: str
+    social_links: List[SocialLinkOut] = []
+    template_background: TemplateBackgroundInfo | None = None
+    template_definition: TemplateDefinitionInfo | None = None
 
     class Config:
         from_attributes = True
+
+
+async def _resolve_template_background(db: AsyncSession, theme_id: str | None) -> TemplateBackground | None:
+    # Custom uploaded themes carry their own inline backgroundImage; only
+    # named/admin-managed templates look up a shared background asset.
+    if not theme_id or theme_id == "custom":
+        return None
+    return (
+        await db.execute(select(TemplateBackground).where(TemplateBackground.theme_id == theme_id))
+    ).scalar_one_or_none()
+
+
+async def _resolve_template_definition(db: AsyncSession, theme_id: str | None) -> TemplateDefinitionInfo | None:
+    if not theme_id or theme_id == "custom":
+        return None
+    template = await db.get(Template, theme_id)
+    if not template:
+        return None
+    import json
+    return TemplateDefinitionInfo(
+        id=template.id,
+        name=template.name,
+        layout=template.layout,
+        palette=json.loads(template.palette_json),
+        branding=json.loads(template.branding_json),
+        locked=template.locked,
+    )
 
 
 def _make_profile_url(slug: str) -> str:
@@ -75,6 +143,9 @@ async def create_profile(
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     require_company_context(current_user)
 
+    if (body.theme_id == "custom" or body.custom_theme) and current_user.role != UserRole.super_admin:
+        raise HTTPException(status_code=403, detail="Only super admins can create profiles with custom template code.")
+
     base_slug = slugify(body.display_name)
     slug = base_slug
     counter = 1
@@ -88,6 +159,13 @@ async def create_profile(
             raise HTTPException(status_code=400, detail="Company is required")
     else:
         profile_company_id = current_user.company_id
+
+    # A company's selected template applies to new customer profiles unless an
+    # admin explicitly chooses a different template for this person.
+    if not body.theme_id:
+        company = await db.get(Company, profile_company_id)
+        if company and company.default_template_id:
+            body.theme_id = company.default_template_id
 
     card_type = (body.card_type or "digital_only").strip()
     if card_type not in _ALLOWED_CARD_TYPES:
@@ -111,7 +189,9 @@ async def create_profile(
 
     await db.commit()
     await db.refresh(profile)
-    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug)}
+    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
 
 class LogoUploadOut(BaseModel):
@@ -126,13 +206,19 @@ async def upload_logo(
     if current_user.role not in {UserRole.super_admin, UserRole.business_owner, UserRole.employee}:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    ext = _ALLOWED_LOGO_TYPES.get(file.content_type or "")
+    ext = _ALLOWED_PROFILE_PHOTO_TYPES.get(file.content_type or "")
     if not ext:
-        raise HTTPException(status_code=400, detail="Unsupported image type. Use PNG, JPEG, WebP, SVG, or GIF.")
+        raise HTTPException(status_code=400, detail="Unsupported profile photo type. Use JPG, PNG, or WebP.")
 
     data = await file.read()
-    if len(data) > _MAX_LOGO_BYTES:
+    if len(data) > _MAX_PROFILE_PHOTO_BYTES:
         raise HTTPException(status_code=413, detail="Image too large (max 5 MB).")
+
+    try:
+        with Image.open(BytesIO(data)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid image.") from exc
 
     key = f"logos/{uuid.uuid4().hex}.{ext}"
     url = save_public_asset(key, data, content_type=file.content_type or "application/octet-stream")
@@ -151,6 +237,92 @@ async def get_profile_qr(slug: str, db: Annotated[AsyncSession, Depends(get_db)]
     return Response(content=qr_bytes, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
+async def _download_logo_bytes(url: str | None) -> bytes | None:
+    if not url:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+        response.raise_for_status()
+        return response.content
+    except Exception:
+        return None  # falls back to MDM TapCard branding
+
+
+@router.get("/{profile_id}/wallet/apple")
+async def get_apple_wallet_pass(profile_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(
+        select(Profile, Company.name.label("company_name"))
+        .join(Company, Company.id == Profile.company_id)
+        .where(Profile.id == profile_id, Profile.is_active == True, Profile.is_deleted == False)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    profile, company_name = row
+
+    logo_bytes = await _download_logo_bytes(profile.photo_url)
+
+    try:
+        pkpass_bytes = build_pkpass(
+            profile={
+                "id": profile.id,
+                "display_name": profile.display_name,
+                "title": profile.title,
+                "company_name": company_name,
+                "phone": profile.phone,
+                "email": profile.email,
+                "website": profile.website,
+                "profile_url": _make_profile_url(profile.slug),
+            },
+            logo_bytes=logo_bytes,
+        )
+    except AppleWalletNotConfigured as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return Response(
+        content=pkpass_bytes,
+        media_type="application/vnd.apple.pkpass",
+        headers={"Content-Disposition": f'attachment; filename="mdm-tapcard-{profile.slug}.pkpass"'},
+    )
+
+
+@router.get("/{profile_id}/wallet/google")
+async def get_google_wallet_pass(profile_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]):
+    from app.config import settings
+
+    result = await db.execute(
+        select(Profile, Company.name.label("company_name"))
+        .join(Company, Company.id == Profile.company_id)
+        .where(Profile.id == profile_id, Profile.is_active == True, Profile.is_deleted == False)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    profile, company_name = row
+
+    logo_url = profile.photo_url or f"{settings.PROFILE_BASE_URL}/brand/mdm-tapcard-logo.png"
+
+    try:
+        save_url = build_save_url(
+            profile={
+                "id": profile.id,
+                "display_name": profile.display_name,
+                "title": profile.title,
+                "company_name": company_name,
+                "phone": profile.phone,
+                "email": profile.email,
+                "website": profile.website,
+                "profile_url": _make_profile_url(profile.slug),
+            },
+            logo_url=logo_url,
+        )
+    except GoogleWalletNotConfigured as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"saveUrl": save_url}
+
+
 @router.get("/{slug}", response_model=ProfileOut)
 async def get_profile(slug: str, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
@@ -161,7 +333,9 @@ async def get_profile(slug: str, db: Annotated[AsyncSession, Depends(get_db)]):
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug)}
+    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
 
 class ProfileUpdate(BaseModel):
@@ -206,7 +380,9 @@ async def get_profile_for_edit(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     profile = await _load_profile_for_edit(slug, current_user, db)
-    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug)}
+    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
 
 @router.patch("/{slug}", response_model=ProfileOut)
@@ -217,6 +393,20 @@ async def update_profile(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     profile = await _load_profile_for_edit(slug, current_user, db)
+
+    if current_user.role != UserRole.super_admin:
+        current_template = await db.get(Template, profile.theme_id) if profile.theme_id else None
+        if (
+            current_template
+            and current_template.locked
+            and body.theme_id is not None
+            and body.theme_id != profile.theme_id
+        ):
+            raise HTTPException(status_code=403, detail="This profile uses a locked template; only a super admin can change its layout.")
+        if body.theme_id == "custom" and profile.theme_id != "custom":
+            raise HTTPException(status_code=403, detail="Only super admins can assign custom template code.")
+        if body.custom_theme is not None and body.custom_theme != profile.custom_theme:
+            raise HTTPException(status_code=403, detail="Only super admins can change custom template code.")
 
     if body.card_type is not None:
         card_type = body.card_type.strip()
@@ -245,7 +435,9 @@ async def update_profile(
         .options(selectinload(Profile.social_links))
     )
     profile = result.scalar_one()
-    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug)}
+    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)

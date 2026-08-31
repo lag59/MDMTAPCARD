@@ -31,6 +31,7 @@ class Company(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255))
+    default_template_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     subscription_plan: Mapped[SubscriptionPlan] = mapped_column(Enum(SubscriptionPlan), default=SubscriptionPlan.tap_starter)
     status: Mapped[CompanyStatus] = mapped_column(Enum(CompanyStatus), default=CompanyStatus.active)

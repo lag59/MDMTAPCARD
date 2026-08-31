@@ -7,7 +7,7 @@ import CardForm, { CardFormValues } from "@/components/CardForm";
 import { apiGet, apiPost } from "@/lib/api";
 import type { Profile } from "@/lib/types";
 
-type Company = { id: string; name: string };
+type Company = { id: string; name: string; default_template_id?: string | null };
 type Me = { role: string; company_id: string | null; company_name: string | null };
 
 export default function NewCardPage() {
@@ -34,14 +34,16 @@ export default function NewCardPage() {
   useEffect(() => {
     apiGet<Me>("/api/v1/admin/me").then((data) => {
       setMe(data);
-      if (data.role === "super_admin") {
-        apiGet<Company[]>("/api/v1/admin/companies").then((list) => {
-          setCompanies(list);
-          if (list.length > 0) setSelectedCompanyId(list[0].id);
-        });
-      } else if (data.company_id) {
-        setSelectedCompanyId(data.company_id);
-      }
+      apiGet<Company[]>("/api/v1/admin/companies").then((list) => {
+        setCompanies(list);
+        const company = data.role === "super_admin" ? list[0] : list.find((item) => item.id === data.company_id);
+        if (company) {
+          setSelectedCompanyId(company.id);
+          if (!new URLSearchParams(window.location.search).get("template") && company.default_template_id) {
+            setImportInitial({ theme_id: company.default_template_id });
+          }
+        }
+      });
     });
   }, []);
 
@@ -195,7 +197,11 @@ export default function NewCardPage() {
             <select
               className={input}
               value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              onChange={(e) => {
+                const company = companies.find((item) => item.id === e.target.value);
+                setSelectedCompanyId(e.target.value);
+                setImportInitial(company?.default_template_id ? { theme_id: company.default_template_id } : {});
+              }}
               required
             >
               {companies.map((c) => (
@@ -208,7 +214,7 @@ export default function NewCardPage() {
             </p>
           )}
         </div>
-        <CardForm initial={importInitial} onSubmit={handleSubmit} submitLabel="Create Card" />
+        <CardForm key={`${selectedCompanyId}-${importInitial.theme_id ?? "default"}`} initial={importInitial} onSubmit={handleSubmit} submitLabel="Create Card" />
       </div>
     </div>
   );

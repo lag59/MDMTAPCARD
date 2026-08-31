@@ -92,8 +92,16 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return apiRequest<T>(path, "PATCH", body);
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return apiRequest<T>(path, "PUT", body);
+}
+
 export async function apiDelete(path: string): Promise<void> {
   return apiRequest<void>(path, "DELETE");
+}
+
+export async function apiDeleteJson<T>(path: string): Promise<T> {
+  return apiRequest<T>(path, "DELETE");
 }
 
 // ── Admin gateway helpers ───────────────────────────────────────────────────
@@ -121,12 +129,130 @@ export async function createSquareCheckout<T = { checkout_url: string }>(orderId
   return apiPost<T>(`/api/v1/admin/orders/${orderId}/square-checkout`, {});
 }
 
+export async function createSignupRequestShippingLabel<
+  T = { request_id: string; carrier: string; service: string; tracking_number: string; tracking_url: string | null; label_url: string; cost_cents: number | null }
+>(requestId: string): Promise<T> {
+  return apiPost<T>(`/api/v1/admin/signup-requests/${requestId}/shipping-label`, {});
+}
+
 export async function getAdminSystemStatus<T = { api_version: string; db_ok: boolean; alembic_revision?: string | null; server_time: string }>(): Promise<T> {
   return apiGet<T>("/api/v1/admin/system-status");
 }
 
+export async function getApiHealth(): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(proxied("/health"), { cache: "no-store", signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export type TemplateBackgroundInfo = {
+  theme_id: string;
+  image_url: string | null;
+  position: string;
+  size_mode: "cover" | "contain";
+  opacity: number;
+  overlay_color: string | null;
+  overlay_opacity: number;
+  text_color: string | null;
+  lock_background: boolean;
+};
+
+export async function listTemplateBackgrounds(): Promise<TemplateBackgroundInfo[]> {
+  return apiGet<TemplateBackgroundInfo[]>("/api/v1/admin/template-backgrounds");
+}
+
+export async function updateTemplateBackgroundSettings(
+  themeId: string,
+  updates: Partial<Pick<TemplateBackgroundInfo, "position" | "size_mode" | "opacity" | "overlay_color" | "overlay_opacity" | "text_color" | "lock_background">>
+): Promise<TemplateBackgroundInfo> {
+  return apiPut<TemplateBackgroundInfo>(`/api/v1/admin/template-backgrounds/${themeId}`, updates);
+}
+
+export async function deleteTemplateBackgroundImage(themeId: string): Promise<TemplateBackgroundInfo> {
+  return apiDeleteJson<TemplateBackgroundInfo>(`/api/v1/admin/template-backgrounds/${themeId}/image`);
+}
+
+export async function uploadTemplateBackgroundImage(themeId: string, file: File): Promise<TemplateBackgroundInfo> {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) throw new Error("No access token found. Please sign in again.");
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const path = `/api/v1/admin/template-backgrounds/${themeId}/image`;
+  const proxiedUrl = proxied(path);
+  const directUrl = `${BASE_URL}${path}`;
+
+  let res = await fetch(proxiedUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  if (res.status === 405) {
+    res = await fetch(directUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  }
+
+  if (!res.ok) {
+    let detail = `Upload failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as TemplateBackgroundInfo;
+}
+
+export type ImportedTemplate = {
+  id: string;
+  name: string;
+  layout: "classic" | "minimal" | "corporate" | "spotlight";
+  palette: import("./templates").Palette;
+  branding: Record<string, string>;
+  locked: boolean;
+  background: TemplateBackgroundInfo | null;
+};
+
+export async function importTemplateZip(file: File): Promise<ImportedTemplate> {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) throw new Error("No access token found. Please sign in again.");
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(proxied("/api/v1/admin/templates/import-zip"), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(body.detail ?? "Could not import template ZIP.");
+  }
+  return (await response.json()) as ImportedTemplate;
+}
+
+export async function listReusableTemplates(): Promise<ImportedTemplate[]> {
+  return apiGet<ImportedTemplate[]>("/api/v1/admin/templates");
+}
+
 export async function fetchProfile(slug: string) {
-  const res = await fetch(proxied(`/api/v1/profiles/${slug}`), {
+  const path = `/api/v1/profiles/${slug}`;
+  const url = typeof window === "undefined" ? `${BASE_URL}${path}` : proxied(path);
+  const res = await fetch(url, {
     cache: "no-store",
   });
   if (!res.ok) return null;
@@ -256,9 +382,19 @@ export async function submitSignupRequest(payload: {
   email: string;
   phone?: string;
   plan_interest?: string;
+  service_interest: "digital_card" | "physical_tap_card" | "physical_tap_card_with_design" | "tap_button_for_phone";
   team_size?: string;
+  quantity?: number;
+  shipping_name?: string;
+  shipping_company?: string;
+  shipping_address1?: string;
+  shipping_address2?: string;
+  shipping_city?: string;
+  shipping_state?: string;
+  shipping_postal_code?: string;
+  shipping_country?: string;
   notes?: string;
-}): Promise<{ request_id: string; submitted: boolean; message: string }> {
+}): Promise<{ request_id: string; submitted: boolean; message: string; payment_required?: boolean; checkout_url?: string | null; is_design_request?: boolean }> {
   const res = await fetch(proxied("/api/v1/public/signup-request"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -277,5 +413,12 @@ export async function submitSignupRequest(payload: {
     throw new Error(detail);
   }
 
-  return (await res.json()) as { request_id: string; submitted: boolean; message: string };
+  return (await res.json()) as {
+    request_id: string;
+    submitted: boolean;
+    message: string;
+    payment_required?: boolean;
+    checkout_url?: string | null;
+    is_design_request?: boolean;
+  };
 }
