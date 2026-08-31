@@ -9,7 +9,7 @@ primary_region = "iad"
 
 [env]
   # API base URL for connecting to the backend
-  NEXT_PUBLIC_API_URL = "https://mdm-tapcard-api.fly.dev"
+  NEXT_PUBLIC_API_URL = "https://api.mdmsolutionlab.com"
 
 [http_service]
   internal_port = 3000
