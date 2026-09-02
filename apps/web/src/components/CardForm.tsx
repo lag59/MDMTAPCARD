@@ -4,7 +4,8 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import TemplatePreview from "./TemplatePreview";
 import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
-import { apiGet, listReusableTemplates, uploadLogo, type ImportedTemplate } from "@/lib/api";
+import { apiGet, listReusableTemplates, uploadLogo, uploadProfileBackground, deleteProfileBackground, type ImportedTemplate } from "@/lib/api";
+import type { TemplateBackground } from "@/lib/types";
 
 const PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "youtube"] as const;
 
@@ -32,9 +33,11 @@ interface Props {
   initial?: Partial<CardFormValues>;
   onSubmit: (values: CardFormValues) => Promise<void>;
   submitLabel: string;
+  slug?: string;
+  initialBackground?: TemplateBackground | null;
 }
 
-export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
+export default function CardForm({ initial, onSubmit, submitLabel, slug, initialBackground }: Props) {
   const normalizedInitial: CardFormValues = {
     display_name: initial?.display_name ?? "",
     title: initial?.title ?? "",
@@ -65,6 +68,10 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [reusableTemplates, setReusableTemplates] = useState<ImportedTemplate[]>([]);
   const customFileRef = useRef<HTMLInputElement>(null);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(initialBackground?.image_url ?? null);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const backgroundFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiGet<{ role: string }>("/api/v1/admin/me")
@@ -122,6 +129,42 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
       setError(err instanceof Error ? err.message : "Invalid template file.");
     } finally {
       e.currentTarget.value = "";
+    }
+  };
+
+  const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!slug) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setBackgroundError("Please choose a JPG, PNG, or WebP background image.");
+      e.target.value = "";
+      return;
+    }
+    setUploadingBackground(true);
+    setBackgroundError(null);
+    try {
+      const updated = await uploadProfileBackground(slug, file);
+      setBackgroundUrl(updated.template_background?.image_url ?? null);
+    } catch (err) {
+      setBackgroundError(err instanceof Error ? err.message : "Background upload failed.");
+    } finally {
+      setUploadingBackground(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleBackgroundRemove = async () => {
+    if (!slug) return;
+    setUploadingBackground(true);
+    setBackgroundError(null);
+    try {
+      await deleteProfileBackground(slug);
+      setBackgroundUrl(null);
+    } catch (err) {
+      setBackgroundError(err instanceof Error ? err.message : "Could not remove background.");
+    } finally {
+      setUploadingBackground(false);
     }
   };
 
@@ -363,6 +406,61 @@ export default function CardForm({ initial, onSubmit, submitLabel }: Props) {
           </div>
         </div>
       </div>
+
+      {isSuperAdmin && slug ? (
+        <div className="rounded-lg border border-slate-200 p-4">
+          <p className="text-sm font-medium text-slate-700 mb-1">Profile Background</p>
+          <p className="text-xs text-slate-500 mb-3">
+            Upload a background image saved only to this profile. It applies to this person&apos;s card
+            only and is not shared with any template or other profiles.
+          </p>
+          {backgroundUrl ? (
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={backgroundUrl}
+                alt="Profile background preview"
+                className="h-20 w-32 rounded-md object-cover border border-slate-200"
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => backgroundFileRef.current?.click()}
+                  disabled={uploadingBackground}
+                  className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-50"
+                >
+                  {uploadingBackground ? "Uploading…" : "Replace background"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackgroundRemove}
+                  disabled={uploadingBackground}
+                  className="text-xs font-medium text-red-500 hover:underline disabled:opacity-50"
+                >
+                  Remove background
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => backgroundFileRef.current?.click()}
+              disabled={uploadingBackground}
+              className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {uploadingBackground ? "Uploading…" : "Upload background image"}
+            </button>
+          )}
+          {backgroundError ? <p className="mt-2 text-xs text-red-600">{backgroundError}</p> : null}
+          <input
+            ref={backgroundFileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleBackgroundUpload}
+            className="hidden"
+          />
+        </div>
+      ) : null}
 
       <div className="rounded-lg border border-slate-200 p-4">
         <p className="text-sm font-medium text-slate-700 mb-1">Scheduling &amp; Payments</p>

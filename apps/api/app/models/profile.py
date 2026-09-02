@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,15 @@ class Profile(Base):
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     theme_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     custom_theme: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON for uploaded custom templates
+    # Per-profile background: saved only on this profile, not shared across a template.
+    background_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    background_image_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    background_position: Mapped[str] = mapped_column(String(40), default="center center")
+    background_size_mode: Mapped[str] = mapped_column(String(10), default="cover")  # cover | contain
+    background_opacity: Mapped[float] = mapped_column(Float, default=1.0)
+    background_overlay_color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    background_overlay_opacity: Mapped[float] = mapped_column(Float, default=0.0)
+    background_text_color: Mapped[str | None] = mapped_column(String(20), nullable=True)
     booking_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # scheduling link (Calendly/Cal.com)
     payment_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # payment link (Stripe/PayPal)
     payment_label: Mapped[str | None] = mapped_column(String(80), nullable=True)

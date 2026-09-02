@@ -299,6 +299,49 @@ export async function uploadLogo(file: File): Promise<string> {
   return data.url;
 }
 
+export async function uploadProfileBackground(slug: string, file: File): Promise<import("./types").Profile> {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) throw new Error("No access token found. Please sign in again.");
+
+  const form = new FormData();
+  form.append("file", file);
+
+  const path = `/api/v1/profiles/${slug}/background`;
+  const proxiedUrl = proxied(path);
+  const directUrl = `${BASE_URL}${path}`;
+
+  let res = await fetch(proxiedUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+
+  if (res.status === 405) {
+    res = await fetch(directUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+  }
+
+  if (!res.ok) {
+    let detail = `Upload failed (${res.status})`;
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as import("./types").Profile;
+}
+
+export async function deleteProfileBackground(slug: string): Promise<import("./types").Profile> {
+  return apiDeleteJson<import("./types").Profile>(`/api/v1/profiles/${slug}/background`);
+}
+
 export async function trackEvent(payload: {
   profile_id: string;
   tag_token?: string;

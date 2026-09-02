@@ -15,12 +15,12 @@ from app.core.deps import CurrentUser, get_db, require_company_context, enforce_
 from app.models.profile import Profile, SocialLink
 from app.models.company import Company
 from app.models.template import Template
-from app.models.template_background import TemplateBackground
 from app.models.user import UserRole
 from app.utils.apple_wallet import AppleWalletNotConfigured, build_pkpass
 from app.utils.google_wallet import GoogleWalletNotConfigured, build_save_url
 from app.utils.qr import generate_qr_bytes
-from app.utils.storage import save_public_asset
+from app.utils.storage import save_public_asset, delete_public_asset
+from app.utils.images import optimize_template_background
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ _ALLOWED_CARD_TYPES = {"digital_only", "nfc_card", "nfc_button"}
 
 _ALLOWED_PROFILE_PHOTO_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 _MAX_PROFILE_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
+_MAX_PROFILE_BACKGROUND_BYTES = 15 * 1024 * 1024  # 15 MB
 
 
 class SocialLinkIn(BaseModel):
@@ -101,14 +102,21 @@ class ProfileOut(ProfileCreate):
         from_attributes = True
 
 
-async def _resolve_template_background(db: AsyncSession, theme_id: str | None) -> TemplateBackground | None:
-    # Custom uploaded themes carry their own inline backgroundImage; only
-    # named/admin-managed templates look up a shared background asset.
-    if not theme_id or theme_id == "custom":
+def _resolve_template_background(profile: Profile) -> TemplateBackgroundInfo | None:
+    # Background is stored per profile and applies only to this profile; it is
+    # intentionally NOT inherited from a shared/template-wide background.
+    if not profile.background_image_url and not profile.background_text_color:
         return None
-    return (
-        await db.execute(select(TemplateBackground).where(TemplateBackground.theme_id == theme_id))
-    ).scalar_one_or_none()
+    return TemplateBackgroundInfo(
+        image_url=profile.background_image_url,
+        position=profile.background_position or "center center",
+        size_mode=profile.background_size_mode or "cover",
+        opacity=profile.background_opacity if profile.background_opacity is not None else 1.0,
+        overlay_color=profile.background_overlay_color,
+        overlay_opacity=profile.background_overlay_opacity if profile.background_overlay_opacity is not None else 0.0,
+        text_color=profile.background_text_color,
+        lock_background=False,
+    )
 
 
 async def _resolve_template_definition(db: AsyncSession, theme_id: str | None) -> TemplateDefinitionInfo | None:
@@ -189,7 +197,7 @@ async def create_profile(
 
     await db.commit()
     await db.refresh(profile)
-    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_background = _resolve_template_background(profile)
     template_definition = await _resolve_template_definition(db, profile.theme_id)
     return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
@@ -223,6 +231,119 @@ async def upload_logo(
     key = f"logos/{uuid.uuid4().hex}.{ext}"
     url = save_public_asset(key, data, content_type=file.content_type or "application/octet-stream")
     return {"url": url}
+
+
+class ProfileBackgroundSettingsUpdate(BaseModel):
+    position: str | None = None
+    size_mode: str | None = None
+    opacity: float | None = None
+    overlay_color: str | None = None
+    overlay_opacity: float | None = None
+    text_color: str | None = None
+
+
+def _require_super_admin(current_user) -> None:
+    if current_user.role != UserRole.super_admin:
+        raise HTTPException(status_code=403, detail="Only super admins can change a profile background.")
+
+
+@router.post("/{slug}/background", response_model=ProfileOut)
+async def upload_profile_background(
+    slug: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(...)],
+):
+    _require_super_admin(current_user)
+    profile = await _load_profile_for_edit(slug, current_user, db)
+
+    if (file.content_type or "") not in _ALLOWED_PROFILE_PHOTO_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported background type. Use JPG, PNG, or WebP.")
+
+    data = await file.read()
+    if len(data) > _MAX_PROFILE_BACKGROUND_BYTES:
+        raise HTTPException(status_code=413, detail="Background too large (max 15 MB).")
+
+    try:
+        optimized = optimize_template_background(data)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid image.") from exc
+
+    old_key = profile.background_image_key
+    key = f"profile-backgrounds/{profile.id}/{uuid.uuid4().hex}.webp"
+    url = save_public_asset(key, optimized, content_type="image/webp")
+    profile.background_image_key = key
+    profile.background_image_url = url
+
+    await db.commit()
+    if old_key and old_key != key:
+        delete_public_asset(old_key)  # best-effort cleanup of the replaced asset
+
+    result = await db.execute(
+        select(Profile).where(Profile.id == profile.id).options(selectinload(Profile.social_links))
+    )
+    profile = result.scalar_one()
+    template_background = _resolve_template_background(profile)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
+
+
+@router.patch("/{slug}/background", response_model=ProfileOut)
+async def update_profile_background_settings(
+    slug: str,
+    body: ProfileBackgroundSettingsUpdate,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    _require_super_admin(current_user)
+    profile = await _load_profile_for_edit(slug, current_user, db)
+
+    field_map = {
+        "position": "background_position",
+        "size_mode": "background_size_mode",
+        "opacity": "background_opacity",
+        "overlay_color": "background_overlay_color",
+        "overlay_opacity": "background_overlay_opacity",
+        "text_color": "background_text_color",
+    }
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(profile, field_map[field], value)
+
+    await db.commit()
+
+    result = await db.execute(
+        select(Profile).where(Profile.id == profile.id).options(selectinload(Profile.social_links))
+    )
+    profile = result.scalar_one()
+    template_background = _resolve_template_background(profile)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
+
+
+@router.delete("/{slug}/background", response_model=ProfileOut)
+async def delete_profile_background(
+    slug: str,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    _require_super_admin(current_user)
+    profile = await _load_profile_for_edit(slug, current_user, db)
+
+    old_key = profile.background_image_key
+    profile.background_image_key = None
+    profile.background_image_url = None
+    await db.commit()
+    if old_key:
+        delete_public_asset(old_key)
+
+    result = await db.execute(
+        select(Profile).where(Profile.id == profile.id).options(selectinload(Profile.social_links))
+    )
+    profile = result.scalar_one()
+    template_background = _resolve_template_background(profile)
+    template_definition = await _resolve_template_definition(db, profile.theme_id)
+    return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
+
 
 
 @router.get("/qr/{slug}")
@@ -333,7 +454,7 @@ async def get_profile(slug: str, db: Annotated[AsyncSession, Depends(get_db)]):
     profile = result.scalar_one_or_none()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_background = _resolve_template_background(profile)
     template_definition = await _resolve_template_definition(db, profile.theme_id)
     return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
@@ -380,7 +501,7 @@ async def get_profile_for_edit(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     profile = await _load_profile_for_edit(slug, current_user, db)
-    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_background = _resolve_template_background(profile)
     template_definition = await _resolve_template_definition(db, profile.theme_id)
     return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 
@@ -435,7 +556,7 @@ async def update_profile(
         .options(selectinload(Profile.social_links))
     )
     profile = result.scalar_one()
-    template_background = await _resolve_template_background(db, profile.theme_id)
+    template_background = _resolve_template_background(profile)
     template_definition = await _resolve_template_definition(db, profile.theme_id)
     return {**profile.__dict__, "profile_url": _make_profile_url(profile.slug), "template_background": template_background, "template_definition": template_definition}
 

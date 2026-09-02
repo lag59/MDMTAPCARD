@@ -206,7 +206,7 @@ export default function EditCardPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow p-6 max-w-2xl">
-        <CardForm key={profile.slug} initial={initial} onSubmit={handleSubmit} submitLabel="Save Changes" />
+        <CardForm key={profile.slug} initial={initial} onSubmit={handleSubmit} submitLabel="Save Changes" slug={profile.slug} initialBackground={profile.template_background} />
       </div>
 
       <div className="bg-white rounded-xl shadow p-6 max-w-2xl mt-6">
