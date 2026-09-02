@@ -19,7 +19,7 @@ limiter = Limiter(key_func=get_remote_address)
 class TapEventIn(BaseModel):
     profile_id: uuid.UUID
     tag_token: str | None = None
-    event_type: str = "nfc_tap"  # nfc_tap | qr_scan | direct_visit
+    event_type: str = "nfc_tap"  # nfc_tap | qr_scan | direct_visit | save_contact | phone_click | sms_click | email_click | website_click | social_click
     device_type: str | None = None
 
 

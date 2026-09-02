@@ -1,4 +1,5 @@
 import type { Profile } from "@/lib/types";
+import { trackEvent } from "@/lib/api";
 
 const labels = {
   en: { call: "Call", text: "Text", email: "Email" },
@@ -10,6 +11,8 @@ interface Props {
   lang: "en" | "es";
   textClass?: string;
   highContrast?: boolean;
+  tagToken?: string;
+  preview?: boolean;
 }
 
 function normalizePhone(phone: string): string {
@@ -19,7 +22,7 @@ function normalizePhone(phone: string): string {
   return hasPlus ? `+${digits}` : digits;
 }
 
-export default function ContactButtons({ profile, lang, textClass = "text-white", highContrast = false }: Props) {
+export default function ContactButtons({ profile, lang, textClass = "text-white", highContrast = false, tagToken, preview = false }: Props) {
   const l = labels[lang];
   const dialPhone = profile.phone ? normalizePhone(profile.phone) : "";
   const telHref = dialPhone ? `tel:${dialPhone}` : undefined;
@@ -29,11 +32,21 @@ export default function ContactButtons({ profile, lang, textClass = "text-white"
     : `flex flex-col items-center gap-1 rounded-xl bg-white/10 py-3 text-sm font-medium ${textClass} hover:bg-white/20 transition`;
   const badge = highContrast ? "text-[11px] uppercase tracking-wide text-slate-500" : "text-xs uppercase tracking-wide";
 
+  const handleTrack = (eventType: string) => {
+    if (preview) return;
+    trackEvent({
+      profile_id: profile.id,
+      tag_token: tagToken,
+      event_type: eventType,
+    }).catch(() => {});
+  };
+
   return (
     <div className="grid grid-cols-3 gap-3">
       {profile.phone && telHref && (
         <a
-          href={telHref}
+          href={preview ? undefined : telHref}
+          onClick={() => handleTrack("phone_click")}
           className={base}
           aria-label={`${l.call} ${profile.phone}`}
         >
@@ -43,7 +56,8 @@ export default function ContactButtons({ profile, lang, textClass = "text-white"
       )}
       {profile.phone && smsHref && (
         <a
-          href={smsHref}
+          href={preview ? undefined : smsHref}
+          onClick={() => handleTrack("sms_click")}
           className={base}
           aria-label={`${l.text} ${profile.phone}`}
         >
@@ -53,7 +67,8 @@ export default function ContactButtons({ profile, lang, textClass = "text-white"
       )}
       {profile.email && (
         <a
-          href={`mailto:${profile.email}`}
+          href={preview ? undefined : `mailto:${profile.email}`}
+          onClick={() => handleTrack("email_click")}
           className={base}
         >
           <span className={badge}>mail</span>

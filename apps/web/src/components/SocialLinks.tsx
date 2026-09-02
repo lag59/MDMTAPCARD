@@ -37,13 +37,14 @@ const colors: Record<string, string> = {
   youtube: "bg-[#FF0000]",
 };
 
-export default function SocialLinks({ links }: { links: SocialLink[] }) {
+export default function SocialLinks({ links, onTrack }: { links: SocialLink[]; onTrack?: (platform: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       {links.map((link) => (
         <a
           key={link.id}
           href={link.url.startsWith("http") ? link.url : `https://${link.url}`}
+          onClick={() => onTrack?.(link.platform)}
           target="_blank"
           rel="noopener noreferrer"
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium ${colors[link.platform] ?? "bg-slate-600"} hover:opacity-90 transition shadow-sm`}

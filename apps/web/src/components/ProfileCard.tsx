@@ -260,11 +260,16 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       )}
 
       <div className={`${sectionCardClass} rounded-2xl p-4`}>
-        <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={isLightBackground} />
+        <ContactButtons profile={profile} lang={lang} textClass={textClass} highContrast={isLightBackground} tagToken={tagToken} preview={preview} />
       </div>
 
       <a
         href={preview ? undefined : vcardUrl}
+        onClick={() => {
+          if (!preview) {
+            trackEvent({ profile_id: profile.id, tag_token: tagToken, event_type: "save_contact" }).catch(() => {});
+          }
+        }}
         className={`flex items-center justify-center gap-2 rounded-2xl ${palette.save} font-semibold py-4 text-sm shadow-md transition`}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -314,6 +319,11 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       {profile.booking_url && (
         <a
           href={preview ? undefined : (profile.booking_url.startsWith("http") ? profile.booking_url : `https://${profile.booking_url}`)}
+          onClick={() => {
+            if (!preview) {
+              trackEvent({ profile_id: profile.id, tag_token: tagToken, event_type: "website_click" }).catch(() => {});
+            }
+          }}
           target="_blank"
           rel="noopener noreferrer"
           className={`flex items-center justify-center gap-2 rounded-2xl ${palette.save} font-semibold py-4 text-sm shadow-md transition`}
@@ -331,6 +341,11 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       {profile.payment_url && (
         <a
           href={preview ? undefined : (profile.payment_url.startsWith("http") ? profile.payment_url : `https://${profile.payment_url}`)}
+          onClick={() => {
+            if (!preview) {
+              trackEvent({ profile_id: profile.id, tag_token: tagToken, event_type: "website_click" }).catch(() => {});
+            }
+          }}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 text-sm shadow-md transition"
@@ -363,6 +378,11 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
                   <a
                     key={`detail-${link.id}`}
                     href={preview ? undefined : href}
+                    onClick={() => {
+                      if (!preview) {
+                        trackEvent({ profile_id: profile.id, tag_token: tagToken, event_type: "social_click" }).catch(() => {});
+                      }
+                    }}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block"
@@ -374,7 +394,14 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
               })}
             </div>
           )}
-          <SocialLinks links={profile.social_links} />
+          <SocialLinks
+            links={profile.social_links}
+            onTrack={() => {
+              if (!preview) {
+                trackEvent({ profile_id: profile.id, tag_token: tagToken, event_type: "social_click" }).catch(() => {});
+              }
+            }}
+          />
         </div>
       )}
 
