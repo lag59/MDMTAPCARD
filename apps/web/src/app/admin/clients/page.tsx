@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiPatch, grantComplimentaryNfc, listAdminCompanies, listReusableTemplates, type ImportedTemplate } from "@/lib/api";
+import { apiGet, apiPatch, deleteCompany, grantComplimentaryNfc, listAdminCompanies, listReusableTemplates, type ImportedTemplate } from "@/lib/api";
 
 type Company = {
   id: string;
@@ -34,9 +34,15 @@ export default function ClientsPage() {
   const [templates, setTemplates] = useState<ImportedTemplate[]>([]);
   const [editing, setEditing] = useState<Company | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+
+    apiGet<{ role: string }>("/api/v1/admin/me")
+      .then((user) => { if (mounted) setIsSuperAdmin(user.role === "super_admin"); })
+      .catch(() => {});
 
     const load = async () => {
       try {
@@ -99,6 +105,25 @@ export default function ClientsPage() {
       setError(e instanceof Error ? e.message : "Could not add complimentary NFC card.");
     } finally {
       setGrantingCompanyId(null);
+    }
+  };
+
+  const handleDeleteCompany = async (company: Company) => {
+    if (!confirm(`Are you sure you want to delete ${company.name}? This will remove the client, soft-delete all their cards, and deactivate associated users.`)) {
+      return;
+    }
+    setDeletingId(company.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteCompany(company.id);
+      setCompanies((all) => all.filter((c) => c.id !== company.id));
+      if (editing?.id === company.id) setEditing(null);
+      setSuccess(`Deleted ${company.name}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete client.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -168,11 +193,21 @@ export default function ClientsPage() {
                       type="button"
                       disabled={!isBundlePlan(company.subscription_plan) || grantingCompanyId === company.id}
                       onClick={() => addComplimentaryCard(company)}
-                      className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      className="mr-2 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                       title={isBundlePlan(company.subscription_plan) ? "Add 1 complimentary NFC card valid for 1 year" : "Available for bundle plans only"}
                     >
                       {grantingCompanyId === company.id ? "Adding..." : "+ 1 complimentary NFC"}
                     </button>
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        disabled={deletingId === company.id}
+                        onClick={() => handleDeleteCompany(company)}
+                        className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deletingId === company.id ? "Deleting..." : "Delete"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

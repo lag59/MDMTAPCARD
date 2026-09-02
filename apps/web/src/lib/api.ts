@@ -114,8 +114,16 @@ export async function grantComplimentaryNfc(companyId: string, quantity = 1): Pr
   await apiPost(`/api/v1/admin/companies/${companyId}/complimentary-nfc`, { quantity });
 }
 
+export async function deleteCompany(companyId: string): Promise<void> {
+  await apiDelete(`/api/v1/admin/companies/${companyId}`);
+}
+
 export async function listNfcInventory<T = unknown[]>(): Promise<T> {
   return apiGet<T>("/api/v1/nfc/inventory");
+}
+
+export async function deleteNfcInventoryTag(tagId: string): Promise<void> {
+  await apiDelete(`/api/v1/nfc/inventory/${tagId}`);
 }
 
 export async function updateNfcCardNumber<T = { tag_id: string; card_number: string | null }>(

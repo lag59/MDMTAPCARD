@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { listNfcInventory, updateNfcCardNumber } from "@/lib/api";
+import { apiGet, deleteNfcInventoryTag, listNfcInventory, updateNfcCardNumber } from "@/lib/api";
 
 type NfcTag = {
   id: string;
@@ -23,10 +23,16 @@ export default function NfcInventoryPage() {
   const [tags, setTags] = useState<NfcTag[]>([]);
   const [cardNumbers, setCardNumbers] = useState<Record<string, string>>({});
   const [savingTagId, setSavingTagId] = useState<string | null>(null);
+  const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    apiGet<{ role: string }>("/api/v1/admin/me")
+      .then((user) => { if (mounted) setIsSuperAdmin(user.role === "super_admin"); })
+      .catch(() => {});
 
     const load = async () => {
       try {
@@ -84,6 +90,23 @@ export default function NfcInventoryPage() {
     }
   };
 
+  const handleDeleteTag = async (tag: NfcTag) => {
+    const label = tag.card_number || tag.tag_uid || tag.id;
+    if (!confirm(`Are you sure you want to delete this tag (${label}) from inventory?`)) {
+      return;
+    }
+    setDeletingTagId(tag.id);
+    setError(null);
+    try {
+      await deleteNfcInventoryTag(tag.id);
+      setTags((prev) => prev.filter((t) => t.id !== tag.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete tag.");
+    } finally {
+      setDeletingTagId(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -110,7 +133,7 @@ export default function NfcInventoryPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
             <tr>
-              {["Card #", "Tag UID", "Type", "Profile", "Status", "Written By", "Written At"].map((h) => (
+              {["Card #", "Tag UID", "Type", "Profile", "Status", "Written By", "Written At", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium">
                   {h}
                 </th>
@@ -120,7 +143,7 @@ export default function NfcInventoryPage() {
           <tbody>
             {tags.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                   No tags programmed yet. Use the MDM TapCard mobile app to write your first tag.
                 </td>
               </tr>
@@ -176,6 +199,18 @@ export default function NfcInventoryPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-500">{tag.written_by_name ?? tag.written_by ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(tag.written_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        disabled={deletingTagId === tag.id}
+                        onClick={() => handleDeleteTag(tag)}
+                        className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        {deletingTagId === tag.id ? "Deleting..." : "Delete"}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}

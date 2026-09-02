@@ -524,6 +524,20 @@ async def list_inventory(
     return inventory
 
 
+@router.delete("/inventory/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_inventory_tag(
+    tag_id: uuid.UUID,
+    _: Annotated[User, Depends(require_nfc_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    tag = await db.get(NfcTag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="NFC tag not found")
+    await db.delete(tag)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @registration_router.get("/t/{public_token}")
 @public_router.get("/t/{public_token}")
 @limiter.limit("30/minute")

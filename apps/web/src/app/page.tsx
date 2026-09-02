@@ -7,127 +7,91 @@ import { submitSignupRequest } from "@/lib/api";
 
 const oneTimePackages = [
   {
-    key: "digital_professional",
-    name: "Digital Professional",
-    price: "$59",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "A complete digital business profile — no physical NFC card included.",
+    key: "mdm_tap_business",
+    name: "MDM TAP Business",
+    price: "$99",
+    cadence: "first year",
+    note: "$59/year renewal",
+    description: "Our complete 1-year individual business package — digital profile, custom plastic NFC card, and 12-month membership included.",
     features: [
-      "Digital business profile & standard MDM template",
-      "Logo, phone, email, business address",
-      "Click-to-call, click-to-text, Save Contact / vCard",
-      "WhatsApp, social links, About section",
-      "Standard QR code",
-      "Customer dashboard + unlimited self-service updates",
-    ],
-    featured: false,
-  },
-  {
-    key: "nfc_professional_pvc",
-    name: "NFC Professional PVC",
-    price: "$89",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "Everything in Digital Professional, plus a programmed PVC NFC card.",
-    features: ["Everything in Digital Professional", "1 programmed PVC NFC TapCard", "Tap-to-share + QR backup"],
-    featured: false,
-  },
-  {
-    key: "nfc_professional_wood",
-    name: "NFC Professional Wood",
-    price: "$109",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "A premium natural option for a distinctive first impression.",
-    features: ["Everything in Digital Professional", "1 programmed Wood NFC TapCard", "Tap-to-share + QR backup"],
-    featured: false,
-  },
-  {
-    key: "tap_everywhere_pvc",
-    name: "Tap Everywhere PVC",
-    price: "$109",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "A business card plus a second tap point for your phone, desk, or vehicle.",
-    features: ["Digital Professional profile", "1 PVC NFC TapCard", "1 NFC TapButton", "NFC programming + QR access"],
-    featured: false,
-  },
-  {
-    key: "tap_everywhere_wood",
-    name: "Tap Everywhere Wood",
-    price: "$129",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "Wood TapCard plus an additional NFC TapButton.",
-    features: ["Digital Professional profile", "1 Wood NFC TapCard", "1 NFC TapButton", "NFC programming + QR access"],
-    featured: false,
-  },
-  {
-    key: "custom_wood_business",
-    name: "Custom Wood Business",
-    price: "$159",
-    cadence: "one-time",
-    note: "Pro service $12/mo recommended",
-    description: "Our premium package: custom design, multiple tap points, and a Pro analytics trial.",
-    features: [
-      "Digital business profile",
-      "1 Wood NFC TapCard + 1 NFC TapButton",
-      "Custom Template Design",
-      "Up to 4 customer-provided business links",
-      "Standard QR code + customer dashboard",
-      "Pro analytics trial",
+      "1 Custom Plastic NFC Business Card",
+      "Custom Design & NFC Programming",
+      "Complete Digital Business Profile & Dashboard",
+      "Save Contact / vCard + Phone / Email / Text / WhatsApp",
+      "Website & Social Media Links + Business Services info",
+      "QR Code access (no app required for recipient)",
+      "12-Month MDM TAP Membership & Unlimited Profile Updates",
     ],
     featured: true,
   },
   {
-    key: "metal_nfc_professional",
-    name: "Metal NFC Professional",
-    price: "$119+",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "A sleek metal TapCard for a bold, modern impression.",
-    features: ["Everything in Digital Professional", "1 programmed Metal NFC TapCard", "Tap-to-share + QR backup"],
+    key: "mdm_tap_metal",
+    name: "MDM TAP Metal Package",
+    price: "$139",
+    cadence: "first year",
+    note: "$59/year renewal",
+    description: "MDM TAP Business upgraded with a premium Metal NFC Card.",
+    features: [
+      "Everything in MDM TAP Business",
+      "Upgraded to 1 Premium Metal NFC Card",
+      "Sleek metallic finish for a luxury impression",
+      "12-Month MDM TAP Membership ($59/yr renewal)",
+    ],
     featured: false,
   },
   {
-    key: "premium_metal_nfc",
-    name: "Premium Metal NFC",
-    price: "$139+",
-    cadence: "one-time",
-    note: "+ digital service from $7/mo",
-    description: "Our top-tier metal finish for a luxury, timeless presentation.",
-    features: ["Everything in Digital Professional", "1 programmed Premium Metal NFC TapCard", "Tap-to-share + QR backup"],
+    key: "mdm_tap_wood",
+    name: "MDM TAP Wood Package",
+    price: "$124",
+    cadence: "first year",
+    note: "$59/year renewal",
+    description: "MDM TAP Business upgraded with a natural Wood NFC Card.",
+    features: [
+      "Everything in MDM TAP Business",
+      "Upgraded to 1 Natural Wood NFC Card",
+      "Distinctive eco-friendly finish",
+      "12-Month MDM TAP Membership ($59/yr renewal)",
+    ],
+    featured: false,
+  },
+  {
+    key: "mdm_tap_everywhere",
+    name: "MDM TAP Multi-Device",
+    price: "$114",
+    cadence: "first year",
+    note: "$59/year renewal",
+    description: "MDM TAP Business plus an additional NFC Tap Button for your phone or desk.",
+    features: [
+      "Everything in MDM TAP Business",
+      "1 Custom Plastic NFC Card + 1 NFC Tap Button (+$15)",
+      "Multiple tap points linking to the same profile",
+      "12-Month MDM TAP Membership ($59/yr renewal)",
+    ],
     featured: false,
   },
 ] as const;
 
-const cardMaterialStartingPrices = [
-  { name: "PVC NFC", price: "$89 package" },
-  { name: "Wood NFC", price: "$109 package" },
-  { name: "Metal NFC", price: "$119+" },
-  { name: "Premium Metal NFC", price: "$139+" },
+const cardUpgrades = [
+  { name: "Wood NFC Card Upgrade", price: "+$25", total: "$124 total" },
+  { name: "NFC Ring Upgrade", price: "+$30", total: "$129 total" },
+  { name: "Metal NFC Card Upgrade", price: "+$40", total: "$139 total" },
+  { name: "NFC Keychain", price: "+$20", detail: "Additional TAP device" },
+  { name: "NFC Tap Button", price: "+$15", detail: "Additional TAP device for phone/desk" },
+  { name: "Additional Plastic NFC Card", price: "$39", detail: "Extra card linking to same profile" },
 ] as const;
 
-const digitalServicePlans = [
-  {
-    key: "essential",
-    name: "Essential",
-    monthly: "$7/month",
-    annual: "$69/year",
-    features: ["Hosted digital profile", "Customer dashboard", "Unlimited self-service updates", "NFC + QR connectivity"],
-    featured: false,
-  },
-  {
-    key: "pro",
-    name: "Pro",
-    monthly: "$12/month",
-    annual: "$119/year",
-    features: ["Everything in Essential", "Profile view analytics", "NFC tap tracking", "QR scan + link-click analytics"],
-    featured: true,
-  },
-  {
-    key: "business",
+const engravingUpgrades = [
+  { name: "Simple Name / Text Engraving", price: "+$10" },
+  { name: "Logo Engraving", price: "+$15" },
+  { name: "Logo + Name / Details Engraving", price: "+$20" },
+] as const;
+
+const teamPricing = [
+  { team: "5 Users", firstYear: "$299", renewal: "$149/yr renewal", perUser: "~$60/user" },
+  { team: "10 Users", firstYear: "$499", renewal: "$249/yr renewal", perUser: "~$50/user" },
+  { team: "25 Users", firstYear: "$999", renewal: "$499/yr renewal", perUser: "~$40/user" },
+  { team: "50 Users", firstYear: "$1,699", renewal: "$799/yr renewal", perUser: "~$34/user" },
+] as const;
     name: "Business",
     monthly: "$20/month",
     annual: "$199/year",
@@ -686,9 +650,9 @@ export default function Home() {
         <section id="pricing" className="mt-16 md:mt-20">
           <div className="mb-6 max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-700">One tap. One profile. Endless connections.</p>
-            <h3 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">Choose your package</h3>
+            <h3 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">MDM TAP Business — Starting at $99</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Every package is a one-time product price. Digital service is billed separately and keeps your hosted profile active.
+              Your digital business profile + custom NFC card + 1 year of membership ($59/year renewal).
             </p>
           </div>
 
@@ -725,6 +689,54 @@ export default function Home() {
                 </a>
               </article>
             ))}
+          </div>
+
+          <div className="mt-10">
+            <h4 className="text-xl font-bold text-slate-900">Upgrade Your TAP Device</h4>
+            <p className="mt-1 text-sm text-slate-600">Upgrade the plastic card included in your $99 package or add extra devices linking to the same profile.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {cardUpgrades.map((item) => (
+                <div key={item.name} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900">{item.name}</span>
+                      <span className="font-bold text-indigo-600">{item.price}</span>
+                    </div>
+                    {"total" in item && <p className="mt-1 text-xs font-medium text-slate-500">{item.total}</p>}
+                    {"detail" in item && <p className="mt-1 text-xs text-slate-500">{item.detail}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-10">
+            <h4 className="text-xl font-bold text-slate-900">Personalization & Engraving</h4>
+            <p className="mt-1 text-sm text-slate-600">Custom laser engraving for your Metal or Wood NFC products.</p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {engravingUpgrades.map((item) => (
+                <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+                  <span className="font-medium text-slate-700">{item.name}</span>
+                  <span className="font-bold text-slate-900">{item.price}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-10">
+            <h4 className="text-xl font-bold text-slate-900">Team & Enterprise Packages</h4>
+            <p className="mt-1 text-sm text-slate-600">Equip your entire organization with digital profiles and custom NFC products. Upgrades and engraving charged per employee.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {teamPricing.map((item) => (
+                <div key={item.team} className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-indigo-800">{item.team}</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{item.firstYear}</p>
+                  <p className="text-xs font-medium text-slate-500">First year</p>
+                  <p className="mt-2 text-xs font-semibold text-indigo-700">{item.renewal}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{item.perUser}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-10">
