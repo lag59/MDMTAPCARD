@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 import httpx
 from sqlalchemy import func, select, text
@@ -528,6 +528,31 @@ async def update_company(
     }
 
 
+@router.delete("/companies/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_company(
+    company_id: uuid.UUID,
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    company = await db.get(Company, company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Soft-delete all profiles under this company
+    profiles = (await db.execute(select(Profile).where(Profile.company_id == company_id))).scalars().all()
+    for profile in profiles:
+        profile.is_deleted = True
+
+    # Deactivate associated users
+    users = (await db.execute(select(User).where(User.company_id == company_id))).scalars().all()
+    for user in users:
+        user.is_active = False
+
+    await db.delete(company)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/companies/{company_id}/complimentary-nfc", response_model=ComplimentaryNfcGrantResponse)
 async def grant_complimentary_nfc(
     company_id: uuid.UUID,
@@ -695,6 +720,7 @@ async def list_signup_requests(
     rows = (
         await db.execute(
             select(SignupRequest)
+            .where(SignupRequest.status != "closed")
             .order_by(SignupRequest.created_at.desc())
             .limit(500)
         )
