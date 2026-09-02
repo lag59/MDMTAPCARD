@@ -585,20 +585,20 @@ export default function Home() {
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <p className="text-sm font-semibold text-slate-900">Card material starting prices</p>
+              <p className="text-sm font-semibold text-slate-900">TAP products & material upgrades</p>
               <div className="mt-3 space-y-2">
-                {cardMaterialStartingPrices.map((item) => (
+                {cardUpgrades.map((item) => (
                   <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
                     <span className="text-slate-700">{item.name}</span>
                     <span className="font-semibold text-slate-900">{item.price}</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-slate-500">Special finishes, premium materials, bulk orders, and specialty customization may require a custom quote.</p>
+              <p className="mt-3 text-xs text-slate-500">Upgrades apply to the plastic card included in your $99 Business package. Personalization & laser engraving available.</p>
             </div>
             <div className="flex flex-col justify-center rounded-2xl border border-amber-300 bg-amber-50 p-5">
               <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">See full packages</p>
-              <p className="mt-2 text-sm text-slate-700">Compare complete packages, digital service plans, and add-ons.</p>
+              <p className="mt-2 text-sm text-slate-700">Compare complete packages, team pricing, and engraving options.</p>
               <a href="#pricing" className="mt-4 inline-flex w-fit rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
                 View pricing & packages ↓
               </a>
