@@ -311,9 +311,10 @@ def _webhook_status_update(payload: dict) -> tuple[str | None, str | None]:
     if event_type == "invoice.payment_made":
         invoice = data.get("invoice") or {}
         return invoice.get("subscription_id"), "ACTIVE"
-    if event_type in {"invoice.canceled", "invoice.failed"}:
+    if event_type in {"invoice.canceled", "invoice.scheduled_charge_failed"}:
         invoice = data.get("invoice") or {}
-        return invoice.get("subscription_id"), "PAYMENT_FAILED" if event_type == "invoice.failed" else "CANCELED"
+        status = "CANCELED" if event_type == "invoice.canceled" else "PAYMENT_FAILED"
+        return invoice.get("subscription_id"), status
     return None, None
 
 
