@@ -1,4 +1,4 @@
-package com.example.mdm_tapcard
+package com.mdmsolutionlab.tapcard
 
 import io.flutter.embedding.android.FlutterActivity
 

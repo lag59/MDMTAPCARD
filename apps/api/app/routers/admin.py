@@ -26,6 +26,25 @@ SuperAdmin = Depends(require_roles(UserRole.super_admin))
 AdminOrOwner = Depends(require_roles(UserRole.super_admin, UserRole.business_owner))
 
 
+async def require_analytics_access(current_user: User, db: AsyncSession) -> None:
+    """Gate leads/analytics behind the paid add-on for business owners.
+
+    Super admins always have access; business owners need their company's
+    analytics_enabled flag turned on (set by a super admin after they pay).
+    """
+    if current_user.role == UserRole.super_admin:
+        return
+    if not current_user.company_id:
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Analytics is a paid add-on.")
+    company = await db.get(Company, current_user.company_id)
+    if not company or not company.analytics_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Analytics is a paid add-on. Contact MDM TapCard to enable lead capture and analytics for your account.",
+        )
+
+
+
 class CompanyCreate(BaseModel):
     name: str
     default_template_id: str | None = None
@@ -37,6 +56,7 @@ class CompanyUpdate(BaseModel):
     subscription_plan: SubscriptionPlan | None = None
     status: str | None = None
     renewal_date: datetime | None = None
+    analytics_enabled: bool | None = None
 
 
 class UserCreate(BaseModel):
@@ -501,7 +521,7 @@ async def update_company(
     body: CompanyUpdate,
     _: Annotated[User, SuperAdmin],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, str | None]:
+) -> dict[str, str | bool | None]:
     company = await db.get(Company, company_id)
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
@@ -528,6 +548,7 @@ async def update_company(
         "subscription_plan": company.subscription_plan.value,
         "status": company.status.value,
         "renewal_date": company.renewal_date.isoformat() if company.renewal_date else None,
+        "analytics_enabled": company.analytics_enabled,
     }
 
 
@@ -666,6 +687,7 @@ async def list_leads(
     current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict[str, str | bool | None]]:
+    await require_analytics_access(current_user, db)
     query = (
         select(
             Lead.id,
@@ -1245,6 +1267,7 @@ async def analytics_overview(
     current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, int | float | str | None | dict[str, int] | list[dict[str, str | int]]]:
+    await require_analytics_access(current_user, db)
     taps_base = select(TapEvent.id).join(Profile, Profile.id == TapEvent.profile_id)
     leads_base = select(Lead.id).join(Profile, Profile.id == Lead.profile_id)
 

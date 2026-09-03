@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Profile } from "@/lib/types";
 import { trackEvent } from "@/lib/api";
 import { resolveTemplate, type LayoutId, type Palette } from "@/lib/templates";
@@ -58,7 +58,31 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
   const lang = (profile.language === "es" ? "es" : "en") as "en" | "es";
   const copy = i18n[lang];
   const { layout, palette, backgroundImage, backgroundPosition, backgroundSize, backgroundOpacity, overlayColor, overlayOpacity, textColor } = resolveTemplate(profile);
-  const [showForm, setShowForm] = useState(false);
+  // Auto-open the contact-exchange form when the card is opened via an NFC tap / QR scan.
+  const [showForm, setShowForm] = useState<boolean>(!preview && !!tagToken);
+  const [leadPrefill, setLeadPrefill] = useState<{ name?: string; email?: string; phone?: string } | undefined>(undefined);
+  const exchangeTriggeredRef = useRef(false);
+
+  // The visitor's first tap anywhere on the card is a user gesture, which is the only
+  // moment a browser permits opening the contact picker. Fires once, then normal taps resume.
+  async function triggerContactExchange() {
+    if (preview || exchangeTriggeredRef.current) return;
+    const nav = navigator as Navigator & {
+      contacts?: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<Array<{ name?: string[]; email?: string[]; tel?: string[] }>> };
+    };
+    if (!nav.contacts?.select) return;
+    exchangeTriggeredRef.current = true;
+    setShowForm(true);
+    try {
+      const results = await nav.contacts.select(["name", "email", "tel"], { multiple: false });
+      if (results && results.length > 0) {
+        const picked = results[0];
+        setLeadPrefill({ name: picked.name?.[0], email: picked.email?.[0], phone: picked.tel?.[0] });
+      }
+    } catch {
+      // Visitor cancelled the picker or it is unavailable; the manual form stays open.
+    }
+  }
 
   const paletteBackground = palette.bg.toLowerCase();
   const isLightBackground = /(bg-white|from-white|to-white|via-white|slate-(50|100|200)|gray-(50|100|200)|neutral-(50|100|200)|zinc-(50|100|200))/.test(
@@ -419,14 +443,17 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       >
         {copy.inquiry}
       </button>
-      {showForm && !preview && <LeadForm profileId={profile.id} tagToken={tagToken} lang={lang} lightBackground={isLightBackground} />}
+      {showForm && !preview && <LeadForm profileId={profile.id} tagToken={tagToken} lang={lang} lightBackground={isLightBackground} prefill={leadPrefill} />}
     </div>
   );
 
   const bgClass = backgroundImage ? "" : palette.bg;
 
   return (
-    <main className={`relative min-h-screen ${bgClass} flex justify-center pb-16`}>
+    <main
+      onClickCapture={preview ? undefined : triggerContactExchange}
+      className={`relative min-h-screen ${bgClass} flex justify-center pb-16`}
+    >
       {backgroundImage ? (
         <div
           className="pointer-events-none absolute inset-0"

@@ -61,6 +61,7 @@ When the user asks you to act on changAIs review feedback:
 3. Read `.changais/replies.json` for the developer's responses to each note
 
 For each reply:
+
 - `agree` / `will-fix` - make the requested code change
 - `question` - answer the developer's question
 - `disagree` - explain your reasoning or reconsider the note

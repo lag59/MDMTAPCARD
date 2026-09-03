@@ -13,6 +13,7 @@ type Company = {
   default_template_id?: string | null;
   complimentary_nfc_cards?: number;
   complimentary_nfc_expires_at?: string | null;
+  analytics_enabled?: boolean;
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -79,6 +80,7 @@ export default function ClientsPage() {
       await apiPatch(`/api/v1/admin/companies/${editing.id}`, {
         name: editing.name, subscription_plan: editing.subscription_plan, status: editing.status,
         renewal_date: editing.renewal_date || null, default_template_id: editing.default_template_id || null,
+        analytics_enabled: editing.analytics_enabled ?? false,
       });
       setCompanies((all) => all.map((company) => company.id === editing.id ? editing : company));
       setEditing(null);
@@ -224,6 +226,10 @@ export default function ClientsPage() {
             <select value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm"><option value="active">Active</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
             <input type="date" value={editing.renewal_date?.slice(0, 10) ?? ""} onChange={(e) => setEditing({ ...editing, renewal_date: e.target.value ? new Date(`${e.target.value}T00:00:00Z`).toISOString() : null })} className="rounded border border-slate-300 px-3 py-2 text-sm" />
             <select value={editing.default_template_id ?? ""} onChange={(e) => setEditing({ ...editing, default_template_id: e.target.value || null })} className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2"><option value="">No default template</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select>
+            <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 sm:col-span-2">
+              <input type="checkbox" checked={editing.analytics_enabled ?? false} onChange={(e) => setEditing({ ...editing, analytics_enabled: e.target.checked })} className="h-4 w-4" />
+              <span>Paid analytics add-on <span className="text-slate-400">(lets this client view captured leads &amp; analytics)</span></span>
+            </label>
           </div>
           <div className="mt-4 flex gap-2"><button disabled={saving} onClick={saveCompany} className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Saving…" : "Save changes"}</button><button onClick={() => setEditing(null)} className="rounded border border-slate-300 px-3 py-2 text-sm">Cancel</button></div>
         </div>

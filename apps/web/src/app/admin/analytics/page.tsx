@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, ApiError } from "@/lib/api";
 
 type AnalyticsOverview = {
   company_id?: string | null;
@@ -16,6 +16,7 @@ type AnalyticsOverview = {
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -29,7 +30,11 @@ export default function AnalyticsPage() {
         }
       } catch (e) {
         if (mounted) {
-          setError(e instanceof Error ? e.message : "Could not load analytics overview.");
+          if (e instanceof ApiError && e.status === 402) {
+            setLocked(true);
+          } else {
+            setError(e instanceof Error ? e.message : "Could not load analytics overview.");
+          }
         }
       }
     };
@@ -57,6 +62,17 @@ export default function AnalyticsPage() {
         <h1 className="text-2xl font-bold text-slate-800">Analytics</h1>
         <p className="mt-1 text-sm text-slate-500">{data?.company_name ? `Showing activity for ${data.company_name}.` : "Showing activity across all companies."}</p>
       </div>
+
+      {locked ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <h2 className="text-lg font-semibold text-amber-900">Analytics is a paid add-on</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-amber-800">
+            See how often your card is tapped, which links get clicked, and the leads you capture.
+            Contact MDM TapCard to enable analytics for your account.
+          </p>
+        </div>
+      ) : (
+      <>
       {error ? (
         <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-3">{error}</div>
       ) : null}
@@ -133,6 +149,8 @@ export default function AnalyticsPage() {
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -29,6 +29,15 @@ function proxied(path: string): string {
   return `${PROXY_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 type ApiMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): Promise<T> {
@@ -70,7 +79,7 @@ async function apiRequest<T>(path: string, method: ApiMethod, body?: unknown): P
     } catch {
       // Keep fallback detail when response is not JSON.
     }
-    throw new Error(detail);
+    throw new ApiError(response.status, detail);
   }
 
   if (response.status === 204) {

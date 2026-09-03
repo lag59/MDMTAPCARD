@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { startLeadPhoneOtp, submitLead, verifyLeadPhoneOtp } from "@/lib/api";
 
 const copy = {
@@ -17,6 +17,7 @@ const copy = {
     message: "Message",
     consent: "I agree to be contacted by phone/text/email.",
     send: "Send",
+    useMyInfo: "Use my contact info",
     success: "Message sent! We'll be in touch.",
     error: "Something went wrong. Please try again.",
   },
@@ -33,6 +34,7 @@ const copy = {
     message: "Mensaje",
     consent: "Acepto ser contactado por teléfono/SMS/correo.",
     send: "Enviar",
+    useMyInfo: "Usar mi información de contacto",
     success: "¡Mensaje enviado! Estaremos en contacto.",
     error: "Algo salió mal. Inténtalo de nuevo.",
   },
@@ -43,9 +45,10 @@ interface Props {
   tagToken?: string;
   lang: "en" | "es";
   lightBackground: boolean;
+  prefill?: { name?: string; email?: string; phone?: string };
 }
 
-export default function LeadForm({ profileId, tagToken, lang, lightBackground }: Props) {
+export default function LeadForm({ profileId, tagToken, lang, lightBackground, prefill }: Props) {
   const c = copy[lang];
   const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
   const [otpCode, setOtpCode] = useState("");
@@ -58,6 +61,56 @@ export default function LeadForm({ profileId, tagToken, lang, lightBackground }:
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "", consent_to_contact: false });
 
   const phoneChangedAfterVerify = otpVerified && form.phone.trim().length > 0;
+
+  const [canPickContact, setCanPickContact] = useState(false);
+  useEffect(() => {
+    const nav = navigator as Navigator & { contacts?: { select?: unknown } };
+    setCanPickContact(typeof navigator !== "undefined" && !!nav.contacts && typeof nav.contacts.select === "function");
+  }, []);
+
+  // Populate fields when the parent card captures a contact from a tap-anywhere exchange.
+  useEffect(() => {
+    if (!prefill) return;
+    setForm((f) => ({
+      ...f,
+      name: prefill.name ?? f.name,
+      email: prefill.email ?? f.email,
+      phone: prefill.phone ?? f.phone,
+    }));
+    if (prefill.phone) {
+      setOtpVerified(false);
+      setOtpVerificationId(null);
+      setOtpCode("");
+    }
+  }, [prefill]);
+
+  async function handlePickContact() {
+    try {
+      const nav = navigator as Navigator & {
+        contacts?: { select: (props: string[], opts?: { multiple?: boolean }) => Promise<Array<{ name?: string[]; email?: string[]; tel?: string[] }>> };
+      };
+      if (!nav.contacts?.select) return;
+      const results = await nav.contacts.select(["name", "email", "tel"], { multiple: false });
+      if (!results || results.length === 0) return;
+      const picked = results[0];
+      const name = picked.name?.[0];
+      const email = picked.email?.[0];
+      const tel = picked.tel?.[0];
+      setForm((f) => ({
+        ...f,
+        name: name ?? f.name,
+        email: email ?? f.email,
+        phone: tel ?? f.phone,
+      }));
+      if (tel) {
+        setOtpVerified(false);
+        setOtpVerificationId(null);
+        setOtpCode("");
+      }
+    } catch {
+      // Visitor cancelled the picker or it is unavailable; keep the manual form.
+    }
+  }
 
   async function handleSendCode() {
     if (!form.phone.trim()) return;
@@ -133,8 +186,18 @@ export default function LeadForm({ profileId, tagToken, lang, lightBackground }:
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {canPickContact && (
+        <button
+          type="button"
+          onClick={handlePickContact}
+          className={`rounded-lg py-2.5 text-sm font-semibold ${lightBackground ? "bg-slate-800 text-white hover:bg-slate-900" : "bg-white text-slate-900 hover:bg-white/90"}`}
+        >
+          {c.useMyInfo}
+        </button>
+      )}
       <input
         required
+        autoComplete="name"
         placeholder={c.name}
         value={form.name}
         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -142,6 +205,7 @@ export default function LeadForm({ profileId, tagToken, lang, lightBackground }:
       />
       <input
         type="email"
+        autoComplete="email"
         placeholder={c.email}
         value={form.email}
         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
@@ -149,6 +213,7 @@ export default function LeadForm({ profileId, tagToken, lang, lightBackground }:
       />
       <input
         type="tel"
+        autoComplete="tel"
         required={!form.email.trim()}
         placeholder={c.phone}
         value={form.phone}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, ApiError } from "@/lib/api";
 
 type AdminLead = {
   id: string;
@@ -24,6 +24,7 @@ export default function LeadsPage() {
   const [rows, setRows] = useState<AdminLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -36,7 +37,11 @@ export default function LeadsPage() {
         }
       } catch (e) {
         if (mounted) {
-          setError(e instanceof Error ? e.message : "Could not load leads.");
+          if (e instanceof ApiError && e.status === 402) {
+            setLocked(true);
+          } else {
+            setError(e instanceof Error ? e.message : "Could not load leads.");
+          }
         }
       } finally {
         if (mounted) setLoading(false);
@@ -61,6 +66,16 @@ export default function LeadsPage() {
         <h1 className="text-2xl font-bold text-slate-800">Leads</h1>
       </div>
 
+      {locked ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <h2 className="text-lg font-semibold text-amber-900">Lead capture is a paid add-on</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-amber-800">
+            When someone taps your card, we can capture their name, phone, and email so you can follow up.
+            This is a paid analytics feature. Contact MDM TapCard to enable it for your account.
+          </p>
+        </div>
+      ) : (
+      <>
       {error ? (
         <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-3">{error}</div>
       ) : null}
@@ -113,6 +128,8 @@ export default function LeadsPage() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }
