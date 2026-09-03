@@ -797,6 +797,51 @@ async def update_signup_request_status(
     return {"id": str(request.id), "status": request.status}
 
 
+@router.post("/signup-requests/{request_id}/cancel-subscription")
+async def cancel_signup_subscription(
+    request_id: uuid.UUID,
+    _: Annotated[User, SuperAdmin],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str]:
+    request = await db.get(SignupRequest, request_id)
+    if not request:
+        raise HTTPException(status_code=404, detail="Signup request not found")
+    if not request.square_subscription_id:
+        raise HTTPException(status_code=400, detail="This request has no Square subscription")
+    if not settings.SQUARE_ACCESS_TOKEN:
+        raise HTTPException(status_code=400, detail="Square is not configured.")
+
+    url = f"{_square_base_url()}/v2/subscriptions/{request.square_subscription_id}/cancel"
+    headers = {
+        "Authorization": f"Bearer {settings.SQUARE_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+        "Square-Version": "2026-08-01",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(url, headers=headers)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        detail = "Square subscription cancel failed"
+        try:
+            body = exc.response.json()
+            errors = body.get("errors") if isinstance(body, dict) else None
+            if errors and isinstance(errors, list) and errors[0].get("detail"):
+                detail = str(errors[0]["detail"])
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Could not reach Square API") from exc
+
+    data = response.json()
+    subscription = data.get("subscription") if isinstance(data, dict) else None
+    new_status = (subscription or {}).get("status") or "CANCELED"
+    request.subscription_status = str(new_status)
+    await db.commit()
+    return {"id": str(request.id), "subscription_status": request.subscription_status}
+
+
 @router.post("/signup-requests/{request_id}/shipping-label", response_model=ShippingLabelResponse)
 async def create_signup_request_shipping_label(
     request_id: uuid.UUID,

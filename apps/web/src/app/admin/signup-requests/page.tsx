@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiGet, apiPatch } from "@/lib/api";
+import { apiGet, apiPatch, cancelSignupSubscription } from "@/lib/api";
 import { planInterestLabel, serviceInterestLabel } from "@/lib/labels";
 
 type SignupRequestRow = {
@@ -27,6 +27,9 @@ type SignupRequestRow = {
   payment_required: boolean;
   square_checkout_url: string | null;
   square_payment_link_id: string | null;
+  square_customer_id: string | null;
+  square_subscription_id: string | null;
+  subscription_status: string | null;
   notes: string | null;
   status: string;
   queue: "intake" | "fulfillment";
@@ -102,6 +105,20 @@ export default function SignupRequestsPage() {
     }
   };
 
+  const cancelSubscription = async (id: string) => {
+    if (!window.confirm("Cancel this Square subscription? This stops future renewals.")) return;
+    setSavingId(id);
+    setError(null);
+    try {
+      await cancelSignupSubscription(id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not cancel subscription.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold text-slate-900">Signup Requests</h1>
@@ -135,17 +152,18 @@ export default function SignupRequestsPage() {
               <th className="px-4 py-3 text-left">Amount</th>
               <th className="px-4 py-3 text-left">Shipping</th>
               <th className="px-4 py-3 text-left">Square</th>
+              <th className="px-4 py-3 text-left">Subscription</th>
               <th className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-500">Loading…</td>
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">Loading…</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-500">No signup requests yet.</td>
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-500">No signup requests yet.</td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -193,6 +211,25 @@ export default function SignupRequestsPage() {
                       "—"
                     )}
                     <div className="text-xs text-slate-500">{row.square_payment_link_id || ""}</div>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {row.square_subscription_id ? (
+                      <>
+                        <div className="text-xs font-medium">{row.subscription_status || "—"}</div>
+                        {row.subscription_status && !["CANCELED", "canceled", "error"].includes(row.subscription_status) ? (
+                          <button
+                            type="button"
+                            disabled={savingId === row.id}
+                            onClick={() => cancelSubscription(row.id)}
+                            className="mt-1 rounded-lg border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                          >
+                            Cancel
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <select

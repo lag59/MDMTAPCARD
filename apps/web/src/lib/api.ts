@@ -118,6 +118,10 @@ export async function deleteCompany(companyId: string): Promise<void> {
   await apiDelete(`/api/v1/admin/companies/${companyId}`);
 }
 
+export async function cancelSignupSubscription(requestId: string): Promise<void> {
+  await apiPost(`/api/v1/admin/signup-requests/${requestId}/cancel-subscription`, {});
+}
+
 export async function listNfcInventory<T = unknown[]>(): Promise<T> {
   return apiGet<T>("/api/v1/nfc/inventory");
 }
