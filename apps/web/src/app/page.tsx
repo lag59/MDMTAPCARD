@@ -1,169 +1,70 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitSignupRequest } from "@/lib/api";
+import SquareCard, { type SquareCardHandle } from "@/components/SquareCard";
 
-const oneTimePackages = [
-  {
-    key: "mdm_tap_business",
-    name: "MDM TAP Business",
-    price: "$99",
-    cadence: "first year",
-    note: "$59/year renewal",
-    description: "Our complete 1-year individual business package — digital profile, custom plastic NFC card, and 12-month membership included.",
-    features: [
-      "1 Custom Plastic NFC Business Card",
-      "Custom Design & NFC Programming",
-      "Complete Digital Business Profile & Dashboard",
-      "Save Contact / vCard + Phone / Email / Text / WhatsApp",
-      "Website & Social Media Links + Business Services info",
-      "QR Code access (no app required for recipient)",
-      "12-Month MDM TAP Membership & Unlimited Profile Updates",
-    ],
-    featured: true,
-  },
-  {
-    key: "mdm_tap_metal",
-    name: "MDM TAP Metal Package",
-    price: "$139",
-    cadence: "first year",
-    note: "$59/year renewal",
-    description: "MDM TAP Business upgraded with a premium Metal NFC Card.",
-    features: [
-      "Everything in MDM TAP Business",
-      "Upgraded to 1 Premium Metal NFC Card",
-      "Sleek metallic finish for a luxury impression",
-      "12-Month MDM TAP Membership ($59/yr renewal)",
-    ],
-    featured: false,
-  },
-  {
-    key: "mdm_tap_wood",
-    name: "MDM TAP Wood Package",
-    price: "$124",
-    cadence: "first year",
-    note: "$59/year renewal",
-    description: "MDM TAP Business upgraded with a natural Wood NFC Card.",
-    features: [
-      "Everything in MDM TAP Business",
-      "Upgraded to 1 Natural Wood NFC Card",
-      "Distinctive eco-friendly finish",
-      "12-Month MDM TAP Membership ($59/yr renewal)",
-    ],
-    featured: false,
-  },
-  {
-    key: "mdm_tap_everywhere",
-    name: "MDM TAP Multi-Device",
-    price: "$114",
-    cadence: "first year",
-    note: "$59/year renewal",
-    description: "MDM TAP Business plus an additional NFC Tap Button for your phone or desk.",
-    features: [
-      "Everything in MDM TAP Business",
-      "1 Custom Plastic NFC Card + 1 NFC Tap Button (+$15)",
-      "Multiple tap points linking to the same profile",
-      "12-Month MDM TAP Membership ($59/yr renewal)",
-    ],
-    featured: false,
-  },
-] as const;
-
-const cardUpgrades = [
-  { name: "Wood NFC Card Upgrade", price: "+$25", total: "$124 total" },
-  { name: "NFC Ring Upgrade", price: "+$30", total: "$129 total" },
-  { name: "Metal NFC Card Upgrade", price: "+$40", total: "$139 total" },
-  { name: "NFC Keychain", price: "+$20", detail: "Additional TAP device" },
-  { name: "NFC Tap Button", price: "+$15", detail: "Additional TAP device for phone/desk" },
-  { name: "Additional Plastic NFC Card", price: "$39", detail: "Extra card linking to same profile" },
-] as const;
-
-const engravingUpgrades = [
-  { name: "Simple Name / Text Engraving", price: "+$10" },
-  { name: "Logo Engraving", price: "+$15" },
-  { name: "Logo + Name / Details Engraving", price: "+$20" },
-] as const;
-
-const teamPricing = [
-  { team: "5 Users", firstYear: "$299", renewal: "$149/yr renewal", perUser: "~$60/user" },
-  { team: "10 Users", firstYear: "$499", renewal: "$249/yr renewal", perUser: "~$50/user" },
-  { team: "25 Users", firstYear: "$999", renewal: "$499/yr renewal", perUser: "~$40/user" },
-  { team: "50 Users", firstYear: "$1,699", renewal: "$799/yr renewal", perUser: "~$34/user" },
-] as const;
-    name: "Business",
-    monthly: "$20/month",
-    annual: "$199/year",
-    features: ["Everything in Pro", "Advanced analytics", "Lead/conversion reporting", "Priority support"],
-    featured: false,
-  },
-] as const;
-
-const customizationPricing = [
-  { name: "Standard MDM Template", price: "Included" },
-  { name: "Brand Color Customization", price: "+$10" },
-  { name: "Custom Template Design", price: "+$35" },
-  { name: "Advanced Custom Template", price: "+$65+" },
-  { name: "Bilingual English/Spanish Profile", price: "+$20" },
-  { name: "Professional Bio Writing", price: "+$25" },
-  { name: "Custom Branded QR Code", price: "+$15" },
-  { name: "Additional Design Revision", price: "+$15" },
-] as const;
-
-const linkSetupPricing = [
-  { name: "Website Link", price: "+$10" },
-  { name: "Booking / Calendar Link", price: "+$10" },
-  { name: "Payment Portal Link", price: "+$10" },
-  { name: "Review Link", price: "+$10" },
-  { name: "Quote / Estimate Link", price: "+$10" },
-  { name: "Menu / Store / Portfolio Link", price: "+$10" },
-  { name: "Additional Custom Link", price: "+$5" },
-] as const;
-
-const selfServiceUpdates = [
-  "Logo",
+const profileSetupIncludes = [
+  "Digital business profile setup",
+  "Standard MDM template",
+  "Logo or profile photo",
+  "Name and business information",
   "Phone number",
   "Email address",
   "Business address",
+  "Click-to-call",
+  "Click-to-text",
+  "Save Contact / vCard",
+  "WhatsApp",
   "Social media links",
-  "Business name",
-  "Job title",
-  "Bio or business information",
+  "About section",
+  "Standard QR code",
+  "Customer dashboard setup",
+  "NFC profile connection",
+  "Initial testing and activation",
 ] as const;
 
-const addOnPricing = [
-  { name: "Additional NFC TapButton", price: "$15", detail: "Connect another tap point to an existing profile — phones, desks, vehicles, registers, displays." },
-  { name: "Additional NFC Cards", price: "Starting at $30+", detail: "Additional or replacement cards, priced by material, finish, printing, and quantity." },
+const nfcProducts = [
+  { name: "Adhesive NFC TapButton", price: "$9.99" },
+  { name: "PVC NFC TapCard", price: "$14.99" },
+  { name: "NFC Keychain", price: "$14.99" },
+  { name: "Wood NFC TapCard", price: "$34.99" },
+  { name: "NFC Ring", price: "$39.99" },
+  { name: "Metal NFC TapCard", price: "$49.99" },
+  { name: "Premium Custom Metal", price: "$69.99+" },
 ] as const;
 
-const faqItems = [
-  { q: "Do I need an app?", a: "No. The person receiving your information does not need to download an app. Compatible devices can access your profile through NFC tap or QR scan." },
-  { q: "Can I update my information later?", a: "Yes. Customers with an active digital service plan can log into their dashboard and update editable information themselves." },
-  { q: "What happens if my phone number changes?", a: "Log into your dashboard and update it. You only need a new NFC card if the old number was permanently printed or engraved on the physical card." },
-  { q: "Can you connect my appointment calendar?", a: "Yes. You provide the working link from your existing booking or scheduling service, and we add it to your profile." },
-  { q: "Can you accept payments through my digital card?", a: "We can connect your existing payment portal or payment link to your profile. You must already have an active payment-processing account." },
-  { q: "Do you provide the booking or payment service?", a: "No. MDM Creation connects customer-provided URLs to the digital profile. Third-party accounts and services remain between you and the applicable provider." },
+const essentialIncludes = [
+  "Hosted digital profile",
+  "Customer dashboard",
+  "Unlimited self-service updates",
+  "NFC connectivity",
+  "QR connectivity",
+  "Save Contact / vCard",
+  "Click-to-call",
+  "Click-to-text",
+  "Email",
+  "Social media links",
+  "WhatsApp",
+  "Business information",
 ] as const;
 
-const pricingTerms = [
-  { title: "Third-Party Services", body: "MDM Creation does not provide or operate third-party websites, booking systems, scheduling services, payment processors, review platforms, online stores, calendars, or other external services. Customers must establish and maintain their own accounts and provide valid working URLs. Third-party fees, transaction fees, and outages are the customer's responsibility." },
-  { title: "NFC Compatibility", body: "NFC functionality depends on the receiving device being NFC-capable, enabled, and compatible. NFC antenna locations vary between phones, so users may need to tap different areas of their phone. Where available, a QR code provides an alternative access method." },
-  { title: "Wood NFC Cards", body: "Wood is a natural material. Color, grain, texture, tone, and finish may vary between individual cards. These natural variations are not considered manufacturing defects." },
-  { title: "Metal NFC Cards", body: "Because metal affects radio-frequency transmission, metal NFC cards may require tapping at the designated NFC area of the card and a compatible area of the receiving phone. Performance may vary by device." },
-  { title: "Customer-Provided Information", body: "Customers are responsible for ensuring that all submitted information is accurate, including names, phone numbers, emails, addresses, URLs, social accounts, logos, and photographs, and for having permission to use any submitted content." },
-  { title: "Digital Updates vs. Physical Printing", body: "Changes made to your online profile update the digital information associated with your NFC card. They do not change information permanently printed, engraved, or otherwise applied to the physical card. A replacement card may need to be purchased if printed artwork must change." },
-  { title: "Design Revisions", body: "Custom Template Design includes 1 revision. Advanced Custom Template Design includes up to 2 revisions. Additional revisions may be billed at $15 per revision. Major changes outside the approved design scope may require a new quote." },
-  { title: "Reprints & Customer Errors", body: "If an error results from information provided incorrectly by the customer and the physical product has already entered production, reprinting or replacement costs are the customer's responsibility." },
-  { title: "Custom Product Refund Policy", body: "NFC cards, customized designs, branded products, and custom templates are created specifically for each customer. Custom products and completed design services are non-refundable once design or production has begun, except for verified production defects." },
-  { title: "Monthly & Annual Digital Service", body: "The one-time product/setup price and ongoing digital service are separate charges. Your digital service plan provides access to your hosted profile and the features of your selected service level. If service is canceled, the digital profile and related NFC/QR destination may become unavailable once the paid service period expires." },
-] as const;
+// Checkout building blocks — must stay in sync with backend public.py pricing.
+const PROFILE_SETUP_CENTS = 4900;
+const ANNUAL_SERVICE_CENTS = 3900;
 
 const serviceOptions = [
-  { key: "digital_card", label: "Digital Card", requiresShipping: false },
-  { key: "physical_tap_card", label: "Physical Tap Card", requiresShipping: true },
-  { key: "physical_tap_card_with_design", label: "Physical Tap Card + Custom Design (quote required)", requiresShipping: true },
-  { key: "tap_button_for_phone", label: "Adhesive NFC TapButton", requiresShipping: true },
+  { key: "digital_only", label: "Digital only — no card", requiresShipping: false, productCents: 0, quote: false },
+  { key: "tap_button", label: "Adhesive NFC TapButton — $9.99", requiresShipping: true, productCents: 999, quote: false },
+  { key: "pvc_tapcard", label: "PVC NFC TapCard — $14.99", requiresShipping: true, productCents: 1499, quote: false },
+  { key: "keychain", label: "NFC Keychain — $14.99", requiresShipping: true, productCents: 1499, quote: false },
+  { key: "wood_tapcard", label: "Wood NFC TapCard — $34.99", requiresShipping: true, productCents: 3499, quote: false },
+  { key: "ring", label: "NFC Ring — $39.99", requiresShipping: true, productCents: 3999, quote: false },
+  { key: "metal_tapcard", label: "Metal NFC TapCard — $49.99", requiresShipping: true, productCents: 4999, quote: false },
+  { key: "premium_custom_metal", label: "Premium Custom Metal — $69.99+ (quote)", requiresShipping: true, productCents: null, quote: true },
+  { key: "custom_design", label: "Custom Design (quote required)", requiresShipping: true, productCents: null, quote: true },
 ] as const;
 
 const capabilities = [
@@ -293,8 +194,8 @@ export default function Home() {
     contact_name: "",
     email: "",
     phone: "",
-    service_interest: "digital_card",
-    plan_interest: "pro_monthly",
+    service_interest: "pvc_tapcard",
+    plan_interest: "essential_monthly",
     quantity: "1",
     team_size: "",
     shipping_name: "",
@@ -312,8 +213,20 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [healthStatus, setHealthStatus] = useState<"checking" | "connected" | "unreachable">("checking");
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const requiresShipping = form.service_interest !== "digital_card";
+  const cardRef = useRef<SquareCardHandle>(null);
+  const [cardAvailable, setCardAvailable] = useState(false);
+  const selectedService = serviceOptions.find((option) => option.key === form.service_interest) ?? serviceOptions[0];
+  const requiresShipping = selectedService.requiresShipping;
+  const isQuote = selectedService.quote;
+  const isAnnual = form.plan_interest === "essential_annual";
+  const quantity = Math.max(1, Number.parseInt(form.quantity, 10) || 1);
+  const productCents = selectedService.productCents;
+  const productQuantity = selectedService.key === "digital_only" ? 1 : quantity;
+  const dueTodayCents =
+    isQuote || productCents === null
+      ? null
+      : PROFILE_SETUP_CENTS + productCents * productQuantity + (isAnnual ? ANNUAL_SERVICE_CENTS : 0);
+  const formatUsd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   useEffect(() => {
     let mounted = true;
@@ -335,10 +248,6 @@ export default function Home() {
     };
 
     checkHealth();
-    const role = window.localStorage.getItem("user_role");
-    if (mounted) {
-      setIsSuperAdmin(role === "super_admin");
-    }
     return () => {
       mounted = false;
     };
@@ -350,12 +259,21 @@ export default function Home() {
     setError(null);
     setSuccess(null);
     try {
+      let cardSourceId: string | undefined;
+      if (!isQuote && cardAvailable && cardRef.current) {
+        const token = await cardRef.current.tokenize();
+        if (!token) {
+          setSubmitting(false);
+          return;
+        }
+        cardSourceId = token;
+      }
       const result = await submitSignupRequest({
         company_name: form.company_name,
         contact_name: form.contact_name,
         email: form.email,
         phone: form.phone || undefined,
-        service_interest: form.service_interest as "digital_card" | "physical_tap_card" | "physical_tap_card_with_design" | "tap_button_for_phone",
+        service_interest: form.service_interest,
         plan_interest: form.plan_interest || undefined,
         quantity: Number.parseInt(form.quantity, 10) || 1,
         team_size: form.team_size || undefined,
@@ -368,6 +286,7 @@ export default function Home() {
         shipping_postal_code: requiresShipping ? form.shipping_postal_code || undefined : undefined,
         shipping_country: requiresShipping ? form.shipping_country || undefined : undefined,
         notes: form.notes || undefined,
+        card_source_id: cardSourceId,
       });
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
@@ -405,6 +324,9 @@ export default function Home() {
             <a href="#signup" className="text-sm text-slate-600 hover:text-slate-900">
               Sign up
             </a>
+            <Link href="/enterprise" className="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+              Enterprise
+            </Link>
             <Link
               href="/login"
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
@@ -585,22 +507,22 @@ export default function Home() {
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
-              <p className="text-sm font-semibold text-slate-900">TAP products & material upgrades</p>
+              <p className="text-sm font-semibold text-slate-900">NFC products</p>
               <div className="mt-3 space-y-2">
-                {cardUpgrades.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                    <span className="text-slate-700">{item.name}</span>
-                    <span className="font-semibold text-slate-900">{item.price}</span>
+                {nfcProducts.map((product) => (
+                  <div key={product.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                    <span className="text-slate-700">{product.name}</span>
+                    <span className="font-semibold text-slate-900">{product.price}</span>
                   </div>
                 ))}
               </div>
-              <p className="mt-3 text-xs text-slate-500">Upgrades apply to the plastic card included in your $99 Business package. Personalization & laser engraving available.</p>
+              <p className="mt-3 text-xs text-slate-500">One-time purchase. Choose the material and finish that fits your brand.</p>
             </div>
             <div className="flex flex-col justify-center rounded-2xl border border-amber-300 bg-amber-50 p-5">
-              <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">See full packages</p>
-              <p className="mt-2 text-sm text-slate-700">Compare complete packages, team pricing, and engraving options.</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-amber-800">See full pricing</p>
+              <p className="mt-2 text-sm text-slate-700">Compare profile setup, NFC products, and digital service options.</p>
               <a href="#pricing" className="mt-4 inline-flex w-fit rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">
-                View pricing & packages ↓
+                View pricing ↓
               </a>
             </div>
           </div>
@@ -649,209 +571,114 @@ export default function Home() {
 
         <section id="pricing" className="mt-16 md:mt-20">
           <div className="mb-6 max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-700">One tap. One profile. Endless connections.</p>
-            <h3 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">MDM TAP Business — Starting at $99</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-indigo-700">Simple, transparent pricing</p>
+            <h3 className="mt-1 text-2xl font-bold text-slate-900 md:text-3xl">One setup. One card. One low membership.</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Your digital business profile + custom NFC card + 1 year of membership ($59/year renewal).
+              A one-time profile setup, your choice of NFC product, and an affordable digital service plan.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {oneTimePackages.map((pkg) => (
-              <article
-                key={pkg.key}
-                className={`flex flex-col rounded-2xl border p-5 ${
-                  pkg.featured ? "border-indigo-300 bg-indigo-50 shadow-md" : "border-slate-200 bg-white shadow-sm"
-                }`}
-              >
-                {pkg.featured ? (
-                  <span className="mb-2 inline-flex w-fit rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                    Most popular
-                  </span>
-                ) : null}
-                <p className="text-sm font-semibold text-slate-700">{pkg.name}</p>
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+            <article className="rounded-2xl border border-indigo-300 bg-indigo-50 p-6 shadow-md">
+              <p className="text-sm font-semibold uppercase tracking-wide text-indigo-800">One-Time Profile Setup</p>
+              <p className="mt-2 text-4xl font-bold text-slate-900">$49</p>
+              <p className="mt-1 text-sm text-slate-600">Everything you need to launch your digital business profile.</p>
+              <ul className="mt-4 grid gap-x-4 gap-y-1 text-sm text-slate-700 sm:grid-cols-2">
+                {profileSetupIncludes.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-0.5 text-indigo-600">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </article>
+
+            <div className="grid gap-4">
+              <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <span className="inline-flex w-fit rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  Most popular
+                </span>
+                <p className="mt-2 text-sm font-semibold text-slate-700">Essential — Digital Service</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">
-                  {pkg.price}
-                  <span className="ml-1 text-sm font-medium text-slate-500">{pkg.cadence}</span>
+                  $3.99<span className="ml-1 text-sm font-medium text-slate-500">/month</span>
                 </p>
-                <p className="mt-1 text-xs font-medium text-indigo-700">{pkg.note}</p>
-                <p className="mt-3 text-sm text-slate-600">{pkg.description}</p>
-                <ul className="mt-4 space-y-1 text-sm text-slate-600">
-                  {pkg.features.map((feature) => (
-                    <li key={feature}>• {feature}</li>
+                <ul className="mt-4 grid gap-x-4 gap-y-1 text-sm text-slate-600 sm:grid-cols-2">
+                  {essentialIncludes.map((item) => (
+                    <li key={item}>• {item}</li>
                   ))}
                 </ul>
-                <a
-                  href="#signup"
-                  className="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Get started
-                </a>
               </article>
-            ))}
+              <article className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+                <p className="text-sm font-semibold uppercase tracking-wide text-emerald-800">Pay Annually & Save</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">
+                  $39<span className="ml-1 text-sm font-medium text-slate-500">/year</span>
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  Prepay 12 months of Essential — about <span className="font-semibold">$3.25/month</span> vs. $3.99 billed monthly.
+                </p>
+              </article>
+            </div>
           </div>
 
           <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Upgrade Your TAP Device</h4>
-            <p className="mt-1 text-sm text-slate-600">Upgrade the plastic card included in your $99 package or add extra devices linking to the same profile.</p>
+            <h4 className="text-xl font-bold text-slate-900">Choose your NFC product</h4>
+            <p className="mt-1 text-sm text-slate-600">A one-time purchase that links to your always-current profile.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {cardUpgrades.map((item) => (
-                <div key={item.name} className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-slate-900">{item.name}</span>
-                      <span className="font-bold text-indigo-600">{item.price}</span>
-                    </div>
-                    {"total" in item && <p className="mt-1 text-xs font-medium text-slate-500">{item.total}</p>}
-                    {"detail" in item && <p className="mt-1 text-xs text-slate-500">{item.detail}</p>}
-                  </div>
+              {nfcProducts.map((product) => (
+                <div key={product.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+                  <span className="font-medium text-slate-700">{product.name}</span>
+                  <span className="font-bold text-indigo-600">{product.price}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Personalization & Engraving</h4>
-            <p className="mt-1 text-sm text-slate-600">Custom laser engraving for your Metal or Wood NFC products.</p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {engravingUpgrades.map((item) => (
-                <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
-                  <span className="font-medium text-slate-700">{item.name}</span>
-                  <span className="font-bold text-slate-900">{item.price}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Team & Enterprise Packages</h4>
-            <p className="mt-1 text-sm text-slate-600">Equip your entire organization with digital profiles and custom NFC products. Upgrades and engraving charged per employee.</p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {teamPricing.map((item) => (
-                <div key={item.team} className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-sm">
-                  <p className="text-sm font-semibold text-indigo-800">{item.team}</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{item.firstYear}</p>
-                  <p className="text-xs font-medium text-slate-500">First year</p>
-                  <p className="mt-2 text-xs font-semibold text-indigo-700">{item.renewal}</p>
-                  <p className="mt-1 text-[11px] text-slate-400">{item.perUser}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Customize your digital card</h4>
-            <p className="mt-1 text-sm text-slate-600">The standard MDM template is included. Upgrade your design any time.</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {customizationPricing.map((item) => (
-                <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
-                  <span className="text-slate-700">{item.name}</span>
-                  <span className="font-semibold text-slate-900">{item.price}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Add your business links</h4>
-            <p className="mt-1 text-sm text-slate-600">
-              Already use a website, booking service, payment portal, or review page? We can connect those existing links directly to your card.
-            </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.3fr]">
-              <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
-                <p className="text-sm font-semibold uppercase tracking-wide text-cyan-800">Business Link Bundle</p>
-                <p className="mt-3 text-3xl font-bold text-slate-900">$25</p>
-                <p className="mt-2 text-sm text-slate-700">Add up to 4 customer-provided links: Visit Website, Book Now, Pay Now, Leave a Review, Request a Quote, Shop Online, View Menu, or View Portfolio.</p>
+          <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h4 className="text-xl font-bold text-slate-900">Individual example — PVC TapCard</h4>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-semibold text-slate-900">Monthly option</p>
+                <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                  <li className="flex justify-between"><span>Profile setup</span><span className="font-semibold">$49</span></li>
+                  <li className="flex justify-between"><span>PVC TapCard</span><span className="font-semibold">$14.99</span></li>
+                  <li className="flex justify-between"><span>Digital service</span><span className="font-semibold">$3.99/month</span></li>
+                </ul>
+                <p className="mt-3 text-lg font-bold text-slate-900">
+                  $63.99 due today <span className="text-sm font-medium text-slate-500">+ $3.99/month</span>
+                </p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {linkSetupPricing.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
-                    <span className="text-slate-700">{item.name}</span>
-                    <span className="font-semibold text-slate-900">{item.price}</span>
-                  </div>
-                ))}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                <p className="text-sm font-semibold text-slate-900">Annual prepaid option</p>
+                <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                  <li className="flex justify-between"><span>Profile setup</span><span className="font-semibold">$49</span></li>
+                  <li className="flex justify-between"><span>PVC TapCard</span><span className="font-semibold">$14.99</span></li>
+                  <li className="flex justify-between"><span>12-month digital service</span><span className="font-semibold">$39</span></li>
+                </ul>
+                <p className="mt-3 text-lg font-bold text-slate-900">First-year total: $102.99</p>
               </div>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
-              MDM Creation programs customer-provided URLs into the digital card. Customers must already have an active account and valid URL for any connected service; MDM Creation does not provide or operate third-party services.
+            <p className="mt-4 text-sm text-slate-600">
+              No new card is required when your information changes — simply update your MDM Tap profile through your customer dashboard.
             </p>
           </div>
 
-          <div className="mt-10">
-            <h4 className="text-xl font-bold text-slate-900">Monthly digital service</h4>
-            <p className="mt-1 text-sm text-slate-600">Your NFC card is a one-time purchase. Digital service keeps your hosted profile active.</p>
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              {digitalServicePlans.map((plan) => (
-                <article
-                  key={plan.key}
-                  className={`rounded-2xl border p-5 ${plan.featured ? "border-indigo-300 bg-indigo-50 shadow-md" : "border-slate-200 bg-white shadow-sm"}`}
-                >
-                  {plan.featured ? (
-                    <span className="mb-2 inline-flex w-fit rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                      Recommended
-                    </span>
-                  ) : null}
-                  <p className="text-sm font-semibold text-slate-700">{plan.name}</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{plan.monthly}</p>
-                  <p className="mt-1 text-xs text-slate-500">or {plan.annual}</p>
-                  <ul className="mt-4 space-y-1 text-sm text-slate-600">
-                    {plan.features.map((feature) => (
-                      <li key={feature}>• {feature}</li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
+          <div className="mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900 p-6 text-white md:flex-row md:items-center">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-indigo-300">Managing a team?</p>
+              <p className="mt-1 text-lg font-bold">MDM Tap Enterprise — one brand, every team member connected.</p>
+              <p className="mt-1 text-sm text-slate-300">Company setup, branded templates, per-user pricing from $2.49/user/mo, and bulk NFC programming.</p>
             </div>
+            <Link
+              href="/enterprise"
+              className="inline-flex shrink-0 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:-translate-y-0.5 hover:bg-slate-100"
+            >
+              Explore Enterprise →
+            </Link>
           </div>
 
-          <div className="mt-10 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <p className="text-sm font-semibold text-slate-900">Your profile. Your control.</p>
-            <p className="mt-1 text-sm text-slate-700">
-              With an active digital service plan, customers log into their dashboard and update editable profile information themselves — no charge for normal self-service updates.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selfServiceUpdates.map((item) => (
-                <span key={item} className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-4 md:grid-cols-2">
-            {addOnPricing.map((item) => (
-              <div key={item.name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                  <p className="text-xl font-bold text-slate-900">{item.price}</p>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-12">
-            <h4 className="text-xl font-bold text-slate-900">Frequently asked questions</h4>
-            <div className="mt-4 space-y-2">
-              {faqItems.map((item) => (
-                <details key={item.q} className="group rounded-xl border border-slate-200 bg-white p-4 open:shadow-sm">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-900 marker:content-none">{item.q}</summary>
-                  <p className="mt-2 text-sm text-slate-600">{item.a}</p>
-                </details>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <h4 className="text-lg font-bold text-slate-900">Pricing & service terms</h4>
-            <div className="mt-3 space-y-2">
-              {pricingTerms.map((term) => (
-                <details key={term.title} className="group rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-800 marker:content-none">{term.title}</summary>
-                  <p className="mt-2 text-sm text-slate-600">{term.body}</p>
-                </details>
-              ))}
-            </div>
+          <div className="mt-10 rounded-2xl border border-indigo-200 bg-indigo-50 p-6 text-center">
+            <p className="text-lg font-bold tracking-tight text-slate-900">MDM TAP</p>
+            <p className="mt-1 text-sm font-semibold uppercase tracking-[0.2em] text-indigo-700">Tap. Connect. Update.</p>
           </div>
         </section>
 
@@ -934,24 +761,14 @@ export default function Home() {
                 </select>
               </label>
               <label className="text-sm font-medium text-slate-700">
-                Plan interest
+                Digital service plan
                 <select
                   value={form.plan_interest}
                   onChange={(e) => setForm((prev) => ({ ...prev, plan_interest: e.target.value }))}
                   className={formFieldClass}
                 >
-                  <option value="basic_monthly">Basic Monthly ($3.99)</option>
-                  <option value="basic_yearly">Basic Yearly ($39)</option>
-                  <option value="pro_monthly">Pro Monthly ($6.99)</option>
-                  <option value="pro_yearly">Pro Yearly ($69)</option>
-                  {isSuperAdmin ? (
-                    <>
-                      <option value="tap_starter">Tap Starter (Legacy)</option>
-                      <option value="tap_business">Tap Business (Legacy)</option>
-                      <option value="tap_team">Tap Team (Legacy)</option>
-                      <option value="tap_pro">Tap Pro (Legacy)</option>
-                    </>
-                  ) : null}
+                  <option value="essential_monthly">Essential — $3.99/month</option>
+                  <option value="essential_annual">Essential Annual — $39/year (save ~19%)</option>
                 </select>
               </label>
               <label className="text-sm font-medium text-slate-700">
@@ -1066,13 +883,63 @@ export default function Home() {
                   placeholder="Tell us about your rollout timeline or NFC volume goals."
                 />
               </label>
+              {!isQuote ? (
+                <div className="md:col-span-2">
+                  {cardAvailable ? (
+                    <>
+                      <p className="text-sm font-medium text-slate-700">Card for automatic renewal</p>
+                      <p className="mb-2 text-xs text-slate-500">Saved securely with Square to auto-charge your digital service each cycle.</p>
+                    </>
+                  ) : null}
+                  <SquareCard ref={cardRef} onAvailability={setCardAvailable} />
+                </div>
+              ) : null}
+
+              <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">Order summary</p>
+                <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                  <li className="flex justify-between">
+                    <span>One-time profile setup</span>
+                    <span className="font-semibold">{formatUsd(PROFILE_SETUP_CENTS)}</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>
+                      {selectedService.label.split(" — ")[0]}
+                      {selectedService.key !== "digital_only" && !isQuote && productQuantity > 1 ? ` × ${productQuantity}` : ""}
+                    </span>
+                    <span className="font-semibold">
+                      {isQuote || productCents === null
+                        ? "Quote"
+                        : productCents === 0
+                          ? "Included"
+                          : formatUsd(productCents * productQuantity)}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Digital service {isAnnual ? "(annual prepay)" : "(monthly)"}</span>
+                    <span className="font-semibold">{isAnnual ? formatUsd(ANNUAL_SERVICE_CENTS) : "$3.99/mo"}</span>
+                  </li>
+                </ul>
+                <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+                  <span className="text-sm font-semibold text-slate-900">Due today</span>
+                  <span className="text-lg font-bold text-slate-900">
+                    {dueTodayCents === null ? "We'll send a quote" : formatUsd(dueTodayCents)}
+                  </span>
+                </div>
+                {!isAnnual && !isQuote ? (
+                  <p className="mt-1 text-xs text-slate-500">Then $3.99/month for Essential digital service — auto-renews monthly, cancel anytime.</p>
+                ) : null}
+                {isAnnual && !isQuote ? (
+                  <p className="mt-1 text-xs text-slate-500">Auto-renews annually at $39/year after the first year. Cancel anytime.</p>
+                ) : null}
+              </div>
               <div className="md:col-span-2 flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
                   disabled={submitting}
                   className="rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-60"
                 >
-                  {submitting ? "Submitting..." : "Continue to signup"}
+                  {submitting ? "Submitting..." : isQuote ? "Request a quote" : "Continue to secure checkout"}
                 </button>
                 {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
                 {error ? <p className="text-sm text-rose-700">{error}</p> : null}

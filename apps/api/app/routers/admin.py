@@ -396,6 +396,9 @@ async def schema_repair(
     await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS payment_required BOOLEAN NOT NULL DEFAULT FALSE"))
     await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_checkout_url TEXT NULL"))
     await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_payment_link_id VARCHAR(80) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_customer_id VARCHAR(80) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS square_subscription_id VARCHAR(80) NULL"))
+    await db.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30) NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))
     await db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL"))
@@ -752,6 +755,9 @@ async def list_signup_requests(
             "payment_required": bool(row.payment_required),
             "square_checkout_url": row.square_checkout_url,
             "square_payment_link_id": row.square_payment_link_id,
+            "square_customer_id": row.square_customer_id,
+            "square_subscription_id": row.square_subscription_id,
+            "subscription_status": row.subscription_status,
             "shippo_shipment_id": row.shippo_shipment_id,
             "shippo_transaction_id": row.shippo_transaction_id,
             "shipping_carrier": row.shipping_carrier,

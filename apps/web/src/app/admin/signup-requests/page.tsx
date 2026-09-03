@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPatch } from "@/lib/api";
+import { planInterestLabel, serviceInterestLabel } from "@/lib/labels";
 
 type SignupRequestRow = {
   id: string;
@@ -156,8 +157,8 @@ export default function SignupRequestsPage() {
                     <div className="text-xs text-slate-500">{row.email}</div>
                     <div className="text-xs text-slate-500">{row.phone || "—"}</div>
                   </td>
-                  <td className="px-4 py-3 text-slate-700">{row.service_interest || "—"}</td>
-                  <td className="px-4 py-3 text-slate-700">{row.plan_interest || "—"}</td>
+                  <td className="px-4 py-3 text-slate-700">{serviceInterestLabel(row.service_interest)}</td>
+                  <td className="px-4 py-3 text-slate-700">{planInterestLabel(row.plan_interest)}</td>
                   <td className="px-4 py-3 text-slate-700">{row.quantity ?? 1}</td>
                   <td className="px-4 py-3 text-slate-700">
                     {fmtMoney(row.amount_cents, row.currency)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiPatch, createSignupRequestShippingLabel } from "@/lib/api";
+import { serviceInterestLabel } from "@/lib/labels";
 
 type FulfillmentRow = {
   id: string;
@@ -160,7 +161,7 @@ export default function FulfillmentQueuePage() {
                     <div className="text-xs text-slate-500">{row.phone || "—"}</div>
                     {row.notes ? <div className="mt-1 text-xs text-slate-500">Notes: {row.notes}</div> : null}
                   </td>
-                  <td className="px-4 py-3 text-slate-700">{row.service_interest || "—"}</td>
+                  <td className="px-4 py-3 text-slate-700">{serviceInterestLabel(row.service_interest)}</td>
                   <td className="px-4 py-3 text-slate-700">{row.quantity ?? 1}</td>
                   <td className="px-4 py-3 text-slate-700">
                     {row.shipping_address1 ? (

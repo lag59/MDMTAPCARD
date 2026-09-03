@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     SQUARE_ENVIRONMENT: str = "sandbox"  # sandbox | production
     SQUARE_API_BASE_URL: str = ""
     SQUARE_CHECKOUT_REDIRECT_URL: str = ""
+    # Public Square Application ID used by the Web Payments SDK to capture cards
+    # on the signup page. When empty, signups fall back to invoice-based renewal.
+    SQUARE_APPLICATION_ID: str = ""
+    # When true, create a recurring Square subscription (invoice-based auto-renewal)
+    # for the digital service after signup. Safe to leave off; checkout is unaffected.
+    SQUARE_SUBSCRIPTIONS_ENABLED: bool = False
 
     # Shippo shipping labels
     SHIPPO_API_TOKEN: str = ""

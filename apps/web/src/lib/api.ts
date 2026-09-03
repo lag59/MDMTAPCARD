@@ -267,6 +267,29 @@ export async function fetchProfile(slug: string) {
   return res.json();
 }
 
+export interface PaymentsConfig {
+  application_id: string | null;
+  location_id: string | null;
+  environment: string;
+  subscriptions_enabled: boolean;
+}
+
+export async function getPaymentsConfig(): Promise<PaymentsConfig> {
+  const fallback: PaymentsConfig = {
+    application_id: null,
+    location_id: null,
+    environment: "sandbox",
+    subscriptions_enabled: false,
+  };
+  try {
+    const res = await fetch(proxied("/api/v1/public/payments-config"), { cache: "no-store" });
+    if (!res.ok) return fallback;
+    return (await res.json()) as PaymentsConfig;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function uploadLogo(file: File): Promise<string> {
   const token = window.localStorage.getItem("access_token");
   if (!token) throw new Error("No access token found. Please sign in again.");
@@ -433,7 +456,7 @@ export async function submitSignupRequest(payload: {
   email: string;
   phone?: string;
   plan_interest?: string;
-  service_interest: "digital_card" | "physical_tap_card" | "physical_tap_card_with_design" | "tap_button_for_phone";
+  service_interest: string;
   team_size?: string;
   quantity?: number;
   shipping_name?: string;
@@ -445,6 +468,7 @@ export async function submitSignupRequest(payload: {
   shipping_postal_code?: string;
   shipping_country?: string;
   notes?: string;
+  card_source_id?: string;
 }): Promise<{ request_id: string; submitted: boolean; message: string; payment_required?: boolean; checkout_url?: string | null; is_design_request?: boolean }> {
   const res = await fetch(proxied("/api/v1/public/signup-request"), {
     method: "POST",
@@ -455,6 +479,54 @@ export async function submitSignupRequest(payload: {
 
   if (!res.ok) {
     let detail = "Could not submit signup request.";
+    try {
+      const body = (await res.json()) as { detail?: string };
+      if (body?.detail) detail = body.detail;
+    } catch {
+      // keep fallback detail
+    }
+    throw new Error(detail);
+  }
+
+  return (await res.json()) as {
+    request_id: string;
+    submitted: boolean;
+    message: string;
+    payment_required?: boolean;
+    checkout_url?: string | null;
+    is_design_request?: boolean;
+  };
+}
+
+export async function submitEnterpriseSignupRequest(payload: {
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone?: string;
+  user_count: number;
+  billing: "monthly" | "annual";
+  hardware: string;
+  hardware_quantity?: number;
+  shipping_name?: string;
+  shipping_company?: string;
+  shipping_address1?: string;
+  shipping_address2?: string;
+  shipping_city?: string;
+  shipping_state?: string;
+  shipping_postal_code?: string;
+  shipping_country?: string;
+  notes?: string;
+  card_source_id?: string;
+}): Promise<{ request_id: string; submitted: boolean; message: string; payment_required?: boolean; checkout_url?: string | null; is_design_request?: boolean }> {
+  const res = await fetch(proxied("/api/v1/public/enterprise-signup-request"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    let detail = "Could not submit enterprise request.";
     try {
       const body = (await res.json()) as { detail?: string };
       if (body?.detail) detail = body.detail;

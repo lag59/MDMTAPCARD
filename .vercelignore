@@ -1,0 +1,10 @@
+# Vercel builds only apps/web (project rootDirectory = apps/web).
+# Exclude everything not needed for the web build so uploads stay under the
+# per-file 100MB limit (apps/mobile/build contains 150MB+ libflutter.so files).
+apps/mobile/
+apps/api/
+**/node_modules/
+**/.next/
+.git/
+.playwright-mcp/
+mobile-view.png

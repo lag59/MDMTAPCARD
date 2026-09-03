@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { fetchProfile } from "@/lib/api";
 import ProfileCard from "@/components/ProfileCard";
 
+export const revalidate = 0;
+
 interface Props {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ tag?: string }>;

@@ -32,5 +32,8 @@ Thumbs.db
 # ChangAIs reports (auto-generated)
 .changais/
 
+# Tooling scratch (browser automation snapshots/logs)
+.playwright-mcp/
+
 .vercel
 .env*
