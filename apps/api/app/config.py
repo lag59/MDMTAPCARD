@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # When true, create a recurring Square subscription (invoice-based auto-renewal)
     # for the digital service after signup. Safe to leave off; checkout is unaffected.
     SQUARE_SUBSCRIPTIONS_ENABLED: bool = False
+    # Square webhook signature key + the exact notification URL registered in Square.
+    # Used to verify incoming webhook events; when the key is empty the endpoint
+    # acknowledges without processing.
+    SQUARE_WEBHOOK_SIGNATURE_KEY: str = ""
+    SQUARE_WEBHOOK_NOTIFICATION_URL: str = ""
 
     # Shippo shipping labels
     SHIPPO_API_TOKEN: str = ""

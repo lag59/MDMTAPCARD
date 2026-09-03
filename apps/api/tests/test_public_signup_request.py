@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 
 from fastapi import HTTPException, Request
@@ -452,4 +453,71 @@ def test_start_subscription_with_card_saves_card_on_file(monkeypatch) -> None:
     assert status == "ACTIVE"
     # The saved card is attached so Square auto-charges instead of invoicing.
     assert (captured["payload"] or {}).get("card_id") == "card_1"  # type: ignore[union-attr]
+
+
+def _webhook_request(body: bytes, signature: str) -> Request:
+    async def receive() -> dict:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/public/square-webhook",
+        "headers": [(b"x-square-hmacsha256-signature", signature.encode())],
+        "client": ("54.245.1.154", 0),
+        "server": ("testserver", 80),
+        "query_string": b"",
+        "scheme": "https",
+    }
+    return Request(scope, receive)
+
+
+def _square_signature(key: str, url: str, body: bytes) -> str:
+    import base64
+    import hashlib
+    import hmac
+
+    mac = hmac.new(key.encode(), (url + body.decode()).encode(), hashlib.sha256)
+    return base64.b64encode(mac.digest()).decode()
+
+
+def test_webhook_updates_subscription_status(monkeypatch) -> None:
+    key = "whsec_test_key"
+    url = "https://api.test/api/v1/public/square-webhook"
+    monkeypatch.setattr(public.settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", key)
+    monkeypatch.setattr(public.settings, "SQUARE_WEBHOOK_NOTIFICATION_URL", url)
+
+    body = json.dumps({
+        "type": "subscription.updated",
+        "data": {"type": "subscription", "object": {"subscription": {"id": "sub_9", "status": "CANCELED"}}},
+    }).encode()
+    signature = _square_signature(key, url, body)
+    existing = SignupRequest()
+    existing.square_subscription_id = "sub_9"
+    session = _FakeSession(existing=existing)
+
+    response = _run(public.square_webhook(_webhook_request(body, signature), session))  # type: ignore[arg-type]
+
+    assert response == {"status": "ok"}
+    assert session.existing.subscription_status == "CANCELED"  # type: ignore[union-attr]
+
+
+def test_webhook_rejects_invalid_signature(monkeypatch) -> None:
+    monkeypatch.setattr(public.settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "whsec_test_key")
+    monkeypatch.setattr(public.settings, "SQUARE_WEBHOOK_NOTIFICATION_URL", "https://api.test/api/v1/public/square-webhook")
+
+    body = b'{"type":"subscription.updated"}'
+    try:
+        _run(public.square_webhook(_webhook_request(body, "wrong-signature"), _FakeSession()))  # type: ignore[arg-type]
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("Webhook with an invalid signature should be rejected")
+
+
+def test_webhook_noop_when_unconfigured(monkeypatch) -> None:
+    monkeypatch.setattr(public.settings, "SQUARE_WEBHOOK_SIGNATURE_KEY", "")
+    response = _run(public.square_webhook(_webhook_request(b"{}", ""), _FakeSession()))  # type: ignore[arg-type]
+    assert response == {"status": "webhook not configured"}
+
 

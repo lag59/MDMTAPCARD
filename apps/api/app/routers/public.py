@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import hmac
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
@@ -282,6 +286,67 @@ async def payments_config():
         "environment": "production" if env == "production" else "sandbox",
         "subscriptions_enabled": settings.SQUARE_SUBSCRIPTIONS_ENABLED,
     }
+
+
+def _verify_square_signature(signature: str | None, raw_body: bytes) -> bool:
+    key = settings.SQUARE_WEBHOOK_SIGNATURE_KEY
+    if not key or not signature:
+        return False
+    notification_url = (
+        settings.SQUARE_WEBHOOK_NOTIFICATION_URL
+        or f"{settings.API_PUBLIC_URL.rstrip('/')}/api/v1/public/square-webhook"
+    )
+    mac = hmac.new(key.encode("utf-8"), (notification_url + raw_body.decode("utf-8")).encode("utf-8"), hashlib.sha256)
+    expected = base64.b64encode(mac.digest()).decode("utf-8")
+    return hmac.compare_digest(expected, signature)
+
+
+def _webhook_status_update(payload: dict) -> tuple[str | None, str | None]:
+    """Map a Square webhook event to (subscription_id, new_status), if relevant."""
+    event_type = payload.get("type")
+    data = (payload.get("data") or {}).get("object") or {}
+    if event_type == "subscription.updated":
+        sub = data.get("subscription") or {}
+        return sub.get("id"), sub.get("status")
+    if event_type == "invoice.payment_made":
+        invoice = data.get("invoice") or {}
+        return invoice.get("subscription_id"), "ACTIVE"
+    if event_type in {"invoice.canceled", "invoice.failed"}:
+        invoice = data.get("invoice") or {}
+        return invoice.get("subscription_id"), "PAYMENT_FAILED" if event_type == "invoice.failed" else "CANCELED"
+    return None, None
+
+
+@router.post("/square-webhook")
+async def square_webhook(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
+    raw_body = await request.body()
+    # When no signature key is configured, acknowledge without processing so
+    # Square's connectivity test succeeds and unverified events are ignored.
+    if not settings.SQUARE_WEBHOOK_SIGNATURE_KEY:
+        return {"status": "webhook not configured"}
+    signature = request.headers.get("x-square-hmacsha256-signature")
+    if not _verify_square_signature(signature, raw_body):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        return {"status": "ignored"}
+
+    subscription_id, new_status = _webhook_status_update(payload)
+    if subscription_id and new_status:
+        row = (
+            await db.execute(
+                select(SignupRequest)
+                .where(SignupRequest.square_subscription_id == subscription_id)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row:
+            row.subscription_status = str(new_status)
+            await db.commit()
+    return {"status": "ok"}
+
 
 class SignupRequestIn(BaseModel):
     company_name: str
