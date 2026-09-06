@@ -98,6 +98,22 @@ class Settings(BaseSettings):
     # API directly from a browser. Server-side (Netlify) callers don't need this.
     GALLERY_ALLOWED_ORIGINS: str = "*"
 
+    # Social OAuth (Phase 2). Server-side code exchange only; never expose secrets.
+    # Redirect URIs registered with each provider must be:
+    #   {APP_BASE_URL}/api/v1/social/oauth/{platform}/callback
+    APP_BASE_URL: str = "https://mdm-tapcard-api.fly.dev"
+    # Where the browser is sent after a connect attempt finishes.
+    ADMIN_RETURN_URL: str = "https://mdmsolutionlab.com/admin/social-connections"
+    FACEBOOK_GRAPH_VERSION: str = "v21.0"
+    FACEBOOK_CLIENT_ID: str = ""
+    FACEBOOK_CLIENT_SECRET: str = ""
+    # Instagram Graph uses Facebook Login; leave blank to reuse the FACEBOOK_* app.
+    INSTAGRAM_CLIENT_ID: str = ""
+    INSTAGRAM_CLIENT_SECRET: str = ""
+    TIKTOK_CLIENT_KEY: str = ""
+    TIKTOK_CLIENT_SECRET: str = ""
+    SOCIAL_SYNC_INTERVAL_HOURS: int = 6
+
     # Admin notification email (e.g. custom design requests needing manual follow-up)
     ADMIN_NOTIFICATION_EMAIL: str = "andrea@andreabilingualcpr.com"
     # Mailbox is Microsoft 365 (via GoDaddy) per DNS (MX -> ppe-hosted.com, autodiscover -> outlook.com),

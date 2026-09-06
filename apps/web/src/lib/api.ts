@@ -320,6 +320,14 @@ export async function disconnectSocial(platform: string): Promise<void> {
   await apiPost(`/api/v1/social/connections/${platform}/disconnect`, {});
 }
 
+export async function getSocialAuthorizeUrl(platform: string): Promise<{ authorize_url: string }> {
+  return apiGet<{ authorize_url: string }>(`/api/v1/social/connections/${platform}/authorize`);
+}
+
+export async function syncSocialNow(): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  return apiPost<{ imported: number; skipped: number; errors: string[] }>("/api/v1/social/sync", {});
+}
+
 export async function listWebsiteApiKeys(): Promise<WebsiteApiKeyInfo[]> {
   return apiGet<WebsiteApiKeyInfo[]>("/api/v1/social/api-keys");
 }

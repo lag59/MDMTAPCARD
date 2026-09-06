@@ -1,4 +1,6 @@
 import os
+import asyncio
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,10 +10,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
-from app.database import engine
+from app.database import engine, AsyncSessionLocal
 from app.routers import auth, profiles, nfc, analytics, leads, admin, public, template_backgrounds, templates
 from app.routers import social, public_gallery
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
@@ -328,6 +332,28 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_website_api_keys_key_hash ON website_api_keys(key_hash)"))
 
         # Enum evolution is still handled by Alembic migrations.
+
+
+@app.on_event("startup")
+async def _start_social_scheduler() -> None:
+    """Background worker: sync connected social accounts on an interval."""
+    if not settings.SOCIAL_SYNC_ENABLED:
+        return
+
+    from app.services.social_sync import sync_all_active
+
+    async def _loop() -> None:
+        interval = max(1, settings.SOCIAL_SYNC_INTERVAL_HOURS) * 3600
+        while True:
+            try:
+                async with AsyncSessionLocal() as db:
+                    synced = await sync_all_active(db)
+                    logger.info("scheduled social sync ran for %s businesses", synced)
+            except Exception:
+                logger.exception("scheduled social sync loop error")
+            await asyncio.sleep(interval)
+
+    asyncio.create_task(_loop())
 
 
 @app.get("/health")

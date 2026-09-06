@@ -15,24 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.social import (
     ApprovalStatus,
     ConnectionStatus,
-    MediaType,
     SocialConnection,
     SocialMediaItem,
     WebsiteFeed,
 )
+from app.services.social_oauth import OAuthError, fetch_media, refresh_if_needed
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class NormalizedItem:
-    external_media_id: str
-    media_type: MediaType
-    media_url: str | None
-    thumbnail_url: str | None
-    caption: str | None
-    post_url: str | None
-    published_at: datetime | None
 
 
 @dataclass
@@ -42,13 +31,12 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
 
 
-async def _fetch_platform_media(connection: SocialConnection) -> list[NormalizedItem]:
-    """Return normalized media for a connected account.
-
-    Phase 2 implements Instagram/Facebook/TikTok Graph API calls + token refresh
-    here. Returning [] in Phase 1 keeps sync safe before OAuth is wired up.
-    """
-    return []
+async def _fetch_platform_media(connection: SocialConnection):
+    """Refresh the token if needed, then fetch + normalize the account's media."""
+    await refresh_if_needed(connection)
+    if connection.status != ConnectionStatus.connected:
+        return []
+    return await fetch_media(connection)
 
 
 async def sync_business(db: AsyncSession, tenant_id, business_id) -> SyncResult:
@@ -115,3 +103,18 @@ async def sync_business(db: AsyncSession, tenant_id, business_id) -> SyncResult:
 
     await db.commit()
     return result
+
+
+async def sync_all_active(db: AsyncSession) -> int:
+    """Sync every business that has an active, auto-sync feed. Returns businesses synced."""
+    feeds = (
+        await db.execute(select(WebsiteFeed).where(WebsiteFeed.auto_sync == True))  # noqa: E712
+    ).scalars().all()
+    count = 0
+    for feed in feeds:
+        try:
+            await sync_business(db, feed.tenant_id, feed.business_id)
+            count += 1
+        except Exception:  # noqa: BLE001 - never let one business break the batch
+            logger.exception("scheduled sync failed for business %s", feed.business_id)
+    return count

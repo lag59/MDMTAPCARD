@@ -4,11 +4,13 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from slugify import slugify
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.deps import get_db, require_roles
 from app.models.company import Company
 from app.models.social import (
@@ -24,8 +26,9 @@ from app.models.social import (
     WebsiteFeed,
 )
 from app.models.user import User, UserRole
+from app.services import social_oauth
 from app.services.social_sync import sync_business
-from app.utils.crypto import generate_api_key
+from app.utils.crypto import encrypt_token, generate_api_key
 
 router = APIRouter()
 
@@ -338,11 +341,84 @@ async def disconnect(
     return {"platform": platform.value, "status": conn.status.value}
 
 
+@router.get("/connections/{platform}/authorize")
+async def authorize_connection(
+    platform: SocialPlatform,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
+    if not social_oauth.is_configured(platform):
+        raise HTTPException(status_code=400, detail=f"{platform.value} OAuth is not configured yet.")
+    state = social_oauth.make_state(tenant_id, bid, platform)
+    return {"authorize_url": social_oauth.build_authorize_url(platform, state)}
+
+
+@router.get("/oauth/{platform}/callback")
+async def oauth_callback(
+    platform: SocialPlatform,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
+    # Public endpoint: the social platform redirects the user's browser here.
+    return_url = settings.ADMIN_RETURN_URL
+    if error or not code or not state:
+        return RedirectResponse(url=f"{return_url}?connected=0")
+
+    try:
+        claims = social_oauth.read_state(state)
+        if claims.get("platform") != platform.value:
+            raise social_oauth.OAuthError("State/platform mismatch")
+        tenant_id = uuid.UUID(claims["tenant_id"])
+        business_id = uuid.UUID(claims["business_id"])
+        result = await social_oauth.exchange_code(platform, code)
+    except Exception:  # noqa: BLE001 - never surface token/exchange details to the browser
+        return RedirectResponse(url=f"{return_url}?connected=0")
+
+    conn = (
+        await db.execute(
+            select(SocialConnection).where(
+                SocialConnection.business_id == business_id, SocialConnection.platform == platform
+            )
+        )
+    ).scalar_one_or_none()
+    if not conn:
+        conn = SocialConnection(tenant_id=tenant_id, business_id=business_id, platform=platform)
+        db.add(conn)
+
+    conn.platform_account_id = result.platform_account_id
+    conn.platform_username = result.platform_username
+    conn.access_token_encrypted = encrypt_token(result.access_token)
+    conn.refresh_token_encrypted = encrypt_token(result.refresh_token) if result.refresh_token else None
+    conn.token_expires_at = result.token_expires_at
+    conn.scopes = result.scopes
+    conn.status = ConnectionStatus.connected
+    conn.last_error = None
+    conn.connected_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return RedirectResponse(url=f"{return_url}?connected=1&platform={platform.value}")
+
+
 @router.post("/sync/{business_id}")
 async def trigger_sync(
     business_id: uuid.UUID,
     current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
+    result = await sync_business(db, tenant_id, bid)
+    return {"imported": result.imported, "skipped": result.skipped, "errors": result.errors}
+
+
+@router.post("/sync")
+async def trigger_sync_self(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
 ) -> dict:
     tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     result = await sync_business(db, tenant_id, bid)

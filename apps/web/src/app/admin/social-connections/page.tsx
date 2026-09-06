@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listSocialConnections, disconnectSocial, type SocialConnectionInfo } from "@/lib/api";
+import { listSocialConnections, disconnectSocial, getSocialAuthorizeUrl, syncSocialNow, type SocialConnectionInfo } from "@/lib/api";
 
 const PLATFORM_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -39,6 +39,28 @@ export default function SocialConnectionsPage() {
     }
   };
 
+  const connect = async (platform: string) => {
+    setError(null);
+    try {
+      const { authorize_url } = await getSocialAuthorizeUrl(platform);
+      window.location.href = authorize_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start connection.");
+    }
+  };
+
+  const syncNow = async () => {
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await syncSocialNow();
+      setInfo(`Sync complete — ${res.imported} imported, ${res.skipped} already present.`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Sync failed.");
+    }
+  };
+
   const isConnected = (c: SocialConnectionInfo) => c.status === "connected";
 
   return (
@@ -73,7 +95,7 @@ export default function SocialConnectionsPage() {
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
-                  onClick={() => setInfo("Account connection uses the official OAuth flow and ships in Phase 2.")}
+                  onClick={() => connect(c.platform)}
                   className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                 >
                   {isConnected(c) ? "Reconnect" : "Connect"}
@@ -84,7 +106,7 @@ export default function SocialConnectionsPage() {
                   </button>
                 ) : null}
                 <button
-                  onClick={() => setInfo("Sync runs automatically every 6 hours once an account is connected (Phase 2).")}
+                  onClick={syncNow}
                   disabled={!isConnected(c)}
                   className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
