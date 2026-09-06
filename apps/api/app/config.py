@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     OTP_TWILIO_AUTH_TOKEN: str = ""
     OTP_TWILIO_FROM_NUMBER: str = ""
 
+    # General-purpose Twilio SMS (used to text login credentials to clients).
+    # When any of these are blank they fall back to the OTP_TWILIO_* values so a
+    # single Twilio account can power both features.
+    SMS_PROVIDER: str = "twilio"  # twilio | mock
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_FROM_NUMBER: str = ""
+
     # Admin notification email (e.g. custom design requests needing manual follow-up)
     ADMIN_NOTIFICATION_EMAIL: str = "andrea@andreabilingualcpr.com"
     # Mailbox is Microsoft 365 (via GoDaddy) per DNS (MX -> ppe-hosted.com, autodiscover -> outlook.com),

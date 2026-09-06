@@ -19,6 +19,7 @@ from app.models.profile import Profile
 from app.models.signup_request import SignupRequest
 from app.models.template import Template
 from app.models.user import User, UserRole
+from app.utils.sms import normalize_phone, send_sms, sms_configured
 
 router = APIRouter()
 
@@ -65,6 +66,8 @@ class UserCreate(BaseModel):
     password: str
     role: UserRole
     company_id: uuid.UUID | None = None
+    phone: str | None = None
+    send_credentials_sms: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -73,7 +76,13 @@ class UserUpdate(BaseModel):
     password: str | None = None
     role: UserRole | None = None
     company_id: uuid.UUID | None = None
+    phone: str | None = None
     is_active: bool | None = None
+
+
+class TextCredentialsRequest(BaseModel):
+    password: str | None = None
+    phone: str | None = None
 
 
 class ComplimentaryNfcGrantRequest(BaseModel):
@@ -131,6 +140,27 @@ class SchemaRepairResponse(BaseModel):
 
 class SignupRequestStatusUpdate(BaseModel):
     status: str
+
+
+def _login_url() -> str:
+    for origin in settings.ALLOWED_ORIGINS:
+        cleaned = origin.strip().rstrip("/")
+        if cleaned.startswith("https://"):
+            return f"{cleaned}/login"
+    if settings.ALLOWED_ORIGINS:
+        return f"{settings.ALLOWED_ORIGINS[0].strip().rstrip('/')}/login"
+    return "https://tap.mdmcreation.com/login"
+
+
+def _credentials_message(name: str, email: str, password: str) -> str:
+    first = (name or "").strip().split(" ")[0] or "there"
+    return (
+        f"Hi {first}, your MDM TapCard login is ready.\n"
+        f"Sign in: {_login_url()}\n"
+        f"Username: {email}\n"
+        f"Temporary password: {password}\n"
+        "Please change your password after your first login."
+    )
 
 
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
@@ -1143,7 +1173,7 @@ async def create_user(
     body: UserCreate,
     current_user: Annotated[User, AdminOrOwner],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict[str, str]:
+) -> dict[str, str | bool]:
     if current_user.role == UserRole.business_owner:
         if body.role in {UserRole.super_admin, UserRole.programmer, UserRole.business_owner}:
             raise HTTPException(status_code=403, detail="Business owners can only create employee users")
@@ -1163,17 +1193,27 @@ async def create_user(
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
 
+    phone = normalize_phone(body.phone or "")
+    if body.send_credentials_sms and not phone:
+        raise HTTPException(status_code=400, detail="A phone number is required to text credentials")
+
     user = User(
         name=body.name,
         email=body.email,
         hashed_password=hash_password(body.password),
         role=body.role,
         company_id=company_id,
+        phone=phone or None,
     )
     db.add(user)
     await db.commit()
     await db.refresh(user)
-    return {"id": str(user.id), "email": user.email, "role": user.role.value}
+
+    sms_sent = False
+    if body.send_credentials_sms and phone:
+        sms_sent = await send_sms(phone, _credentials_message(user.name, user.email, body.password))
+
+    return {"id": str(user.id), "email": user.email, "role": user.role.value, "sms_sent": sms_sent}
 
 
 @router.get("/users")
@@ -1187,7 +1227,7 @@ async def list_users(
     return [{
         "id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value,
         "company_id": str(user.company_id) if user.company_id else None, "company_name": company_name,
-        "is_active": user.is_active, "is_deleted": user.is_deleted,
+        "phone": user.phone, "is_active": user.is_active, "is_deleted": user.is_deleted,
     } for user, company_name in rows]
 
 
@@ -1212,6 +1252,8 @@ async def update_user(
         updates["email"] = email
     if "company_id" in updates and updates["company_id"] and not await db.get(Company, updates["company_id"]):
         raise HTTPException(status_code=404, detail="Company not found")
+    if "phone" in updates:
+        updates["phone"] = normalize_phone(str(updates["phone"] or "")) or None
     if "password" in updates:
         password = updates.pop("password")
         if password:
@@ -1223,6 +1265,53 @@ async def update_user(
     await db.commit()
     await db.refresh(user)
     return {"id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value, "company_id": str(user.company_id) if user.company_id else None, "is_active": user.is_active}
+
+
+@router.post("/users/{user_id}/text-credentials")
+async def text_user_credentials(
+    user_id: uuid.UUID,
+    body: TextCredentialsRequest,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, str | bool]:
+    """Text a user their login credentials over SMS.
+
+    Because passwords are stored hashed and cannot be recovered, the caller must
+    supply the (temporary) password to send. If a new password is provided it is
+    also saved, so this doubles as a "reset and text" action.
+    """
+    if not sms_configured():
+        raise HTTPException(status_code=400, detail="SMS is not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_FROM_NUMBER.")
+
+    user = await db.get(User, user_id)
+    if not user or user.is_deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if current_user.role == UserRole.business_owner:
+        if user.company_id != current_user.company_id:
+            raise HTTPException(status_code=403, detail="Cannot manage users for another company")
+        if user.role in {UserRole.super_admin, UserRole.programmer, UserRole.business_owner}:
+            raise HTTPException(status_code=403, detail="Business owners can only manage employee users")
+
+    phone = normalize_phone(body.phone or "") or normalize_phone(user.phone or "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="A phone number is required to text credentials")
+
+    password = (body.password or "").strip()
+    if not password:
+        raise HTTPException(status_code=400, detail="Provide the temporary password to text (it cannot be recovered from storage)")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    user.hashed_password = hash_password(password)
+    if phone != user.phone:
+        user.phone = phone
+    await db.commit()
+
+    sms_sent = await send_sms(phone, _credentials_message(user.name, user.email, password))
+    if not sms_sent:
+        raise HTTPException(status_code=502, detail="Could not send the credentials SMS. Check Twilio settings and try again.")
+    return {"id": str(user.id), "sms_sent": True}
 
 
 @router.get("/my-company")

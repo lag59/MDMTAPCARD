@@ -145,6 +145,8 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_tracking_url TEXT NULL"))
         await conn.execute(text("ALTER TABLE signup_requests ADD COLUMN IF NOT EXISTS shipping_cost_cents INTEGER NULL"))
 
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(32) NULL"))
+
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_id UUID NULL"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tag_token VARCHAR(32) NULL"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS source VARCHAR(30) NULL"))

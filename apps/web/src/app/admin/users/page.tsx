@@ -17,6 +17,7 @@ type UserCreateResponse = {
   id: string;
   email: string;
   role: string;
+  sms_sent?: boolean;
 };
 
 type ManagedUser = {
@@ -26,6 +27,7 @@ type ManagedUser = {
   role: string;
   company_id: string | null;
   company_name: string | null;
+  phone: string | null;
   is_active: boolean;
 };
 
@@ -40,6 +42,8 @@ export default function AdminUsersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [sendCredentialsSms, setSendCredentialsSms] = useState(false);
   const [role, setRole] = useState("employee");
   const [companyId, setCompanyId] = useState("");
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -93,6 +97,11 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (sendCredentialsSms && !phone.trim()) {
+      setError("A phone number is required to text credentials.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
@@ -103,12 +112,21 @@ export default function AdminUsersPage() {
       };
 
       if (companyId) payload.company_id = companyId;
+      if (phone.trim()) payload.phone = phone.trim();
+      if (sendCredentialsSms) payload.send_credentials_sms = true;
 
       const created = await apiPost<UserCreateResponse>("/api/v1/admin/users", payload);
-      setSuccess(`Created user ${created.email} (${created.role}).`);
+      const smsNote = sendCredentialsSms
+        ? created.sms_sent
+          ? " Credentials texted to the client."
+          : " But the credentials SMS could not be sent — check Twilio settings."
+        : "";
+      setSuccess(`Created user ${created.email} (${created.role}).${smsNote}`);
       setPassword("");
       setName("");
       setEmail("");
+      setPhone("");
+      setSendCredentialsSms(false);
       setRole(roleOptions[0] ?? "employee");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create user.");
@@ -133,6 +151,36 @@ export default function AdminUsersPage() {
       setSuccess(`Updated ${updated.email}.`);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not update user."); }
     finally { setSubmitting(false); }
+  };
+
+  const textCredentials = async (user: ManagedUser) => {
+    setError(null);
+    setSuccess(null);
+    const targetPhone = user.phone || window.prompt(`Mobile number to text ${user.name}'s credentials to:`, "");
+    if (!targetPhone) return;
+    const tempPassword = window.prompt(
+      "Enter the temporary password to text (this also resets the user's password, minimum 8 characters):",
+      "",
+    );
+    if (!tempPassword) return;
+    if (tempPassword.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await apiPost(`/api/v1/admin/users/${user.id}/text-credentials`, {
+        password: tempPassword,
+        phone: targetPhone,
+      });
+      setUsers((all) => all.map((u) => (u.id === user.id ? { ...u, phone: targetPhone } : u)));
+      setSuccess(`Texted login credentials to ${user.name}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not text credentials.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -178,6 +226,28 @@ export default function AdminUsersPage() {
             placeholder="Minimum 8 characters"
           />
         </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Mobile Number <span className="font-normal text-slate-400">(for texting credentials)</span>
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="+1 555 123 4567"
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={sendCredentialsSms}
+            onChange={(e) => setSendCredentialsSms(e.target.checked)}
+          />
+          Text these credentials to the client instead of emailing them
+        </label>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -228,7 +298,7 @@ export default function AdminUsersPage() {
         </button>
       </form>
 
-      {me?.role === "super_admin" ? <section className="mt-8 rounded-xl bg-white p-6 shadow"><h2 className="text-lg font-semibold text-slate-800">Existing Users</h2><div className="mt-3 divide-y divide-slate-100">{users.map((user) => <div key={user.id} className="flex items-center gap-3 py-3 text-sm"><div className="min-w-0 flex-1"><p className="font-medium text-slate-800">{user.name}</p><p className="truncate text-xs text-slate-500">{user.email} · {user.role} · {user.company_name ?? "No company"}</p></div><span className={`rounded-full px-2 py-1 text-xs ${user.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{user.is_active ? "Active" : "Inactive"}</span><button type="button" onClick={() => { setEditingUser({ ...user }); setResetPassword(""); }} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700">Edit</button></div>)}</div></section> : null}
+      {me?.role === "super_admin" ? <section className="mt-8 rounded-xl bg-white p-6 shadow"><h2 className="text-lg font-semibold text-slate-800">Existing Users</h2><div className="mt-3 divide-y divide-slate-100">{users.map((user) => <div key={user.id} className="flex items-center gap-3 py-3 text-sm"><div className="min-w-0 flex-1"><p className="font-medium text-slate-800">{user.name}</p><p className="truncate text-xs text-slate-500">{user.email} · {user.role} · {user.company_name ?? "No company"}</p></div><span className={`rounded-full px-2 py-1 text-xs ${user.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{user.is_active ? "Active" : "Inactive"}</span><button type="button" onClick={() => textCredentials(user)} disabled={submitting} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-700 disabled:opacity-50">Text credentials</button><button type="button" onClick={() => { setEditingUser({ ...user }); setResetPassword(""); }} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700">Edit</button></div>)}</div></section> : null}
 
       {editingUser ? <section className="mt-6 rounded-xl bg-white p-6 shadow"><h2 className="text-lg font-semibold text-slate-800">Edit User</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><input value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm" placeholder="Name" /><input type="email" value={editingUser.email} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm" placeholder="Email" /><select value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })} className="rounded border border-slate-300 px-3 py-2 text-sm">{roleOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select><select value={editingUser.company_id ?? ""} onChange={(e) => setEditingUser({ ...editingUser, company_id: e.target.value || null })} className="rounded border border-slate-300 px-3 py-2 text-sm"><option value="">No company</option>{companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}</select><input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} className="rounded border border-slate-300 px-3 py-2 text-sm sm:col-span-2" placeholder="Optional new password (minimum 8 characters)" /><label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={editingUser.is_active} onChange={(e) => setEditingUser({ ...editingUser, is_active: e.target.checked })} /> Active account</label></div><div className="mt-4 flex gap-2"><button disabled={submitting} onClick={saveUser} className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{submitting ? "Saving…" : "Save changes"}</button><button onClick={() => setEditingUser(null)} className="rounded border border-slate-300 px-3 py-2 text-sm">Cancel</button></div></section> : null}
     </div>
