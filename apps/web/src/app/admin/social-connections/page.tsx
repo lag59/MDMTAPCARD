@@ -120,8 +120,8 @@ export default function SocialConnectionsPage() {
             Client business
           </label>
           <p className="mt-1 text-xs text-indigo-800">
-            Select the client whose social account you are connecting. They approve access on the social platform;
-            MDM TapCard never receives their password.
+            Select a client to review their connection status. The client&apos;s Business Owner signs into MDM TapCard
+            and connects Facebook, Instagram, or TikTok from their own dashboard, approving access directly with the provider.
           </p>
           <select
             id="social-business"
@@ -163,12 +163,18 @@ export default function SocialConnectionsPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  onClick={() => connect(c.platform)}
-                  className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                >
-                  {isConnected(c) ? "Reconnect" : "Connect"}
-                </button>
+                {isSuperAdmin ? (
+                  <span className="rounded-md bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-800">
+                    Client connects from their dashboard
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => connect(c.platform)}
+                    className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                  >
+                    {isConnected(c) ? "Reconnect" : "Connect"}
+                  </button>
+                )}
                 {isConnected(c) ? (
                   <button onClick={() => disconnect(c.platform)} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
                     Disconnect

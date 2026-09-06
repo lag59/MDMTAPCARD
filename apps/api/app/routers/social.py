@@ -558,6 +558,11 @@ async def authorize_connection(
     db: Annotated[AsyncSession, Depends(get_db)],
     business_id: uuid.UUID | None = None,
 ) -> dict:
+    if current_user.role == UserRole.super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="The client business owner must connect their own social account from their MDM TapCard dashboard.",
+        )
     tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     if not social_oauth.is_configured(platform):
         raise HTTPException(status_code=400, detail=f"{platform.value} OAuth is not configured yet.")

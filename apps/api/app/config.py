@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     FACEBOOK_GRAPH_VERSION: str = "v21.0"
     FACEBOOK_CLIENT_ID: str = ""
     FACEBOOK_CLIENT_SECRET: str = ""
-    # Instagram Graph uses Facebook Login; leave blank to reuse the FACEBOOK_* app.
+    # Instagram uses the separate Business Login for Instagram app credentials.
     INSTAGRAM_CLIENT_ID: str = ""
     INSTAGRAM_CLIENT_SECRET: str = ""
     TIKTOK_CLIENT_KEY: str = ""
