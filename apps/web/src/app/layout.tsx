@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const geist = Geist({ subsets: ["latin"] });
@@ -18,7 +19,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full overflow-x-hidden">
-      <body className={`${geist.className} min-h-full antialiased overflow-x-hidden`}>{children}</body>
+      <body className={`${geist.className} min-h-full antialiased overflow-x-hidden`}>
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
