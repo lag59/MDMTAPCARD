@@ -62,6 +62,12 @@ class ApiKeyStatus(str, enum.Enum):
     revoked = "revoked"
 
 
+class AiStatus(str, enum.Enum):
+    none = "none"
+    suggested = "suggested"
+    applied = "applied"
+
+
 class SocialConnection(Base):
     __tablename__ = "social_connections"
     __table_args__ = (
@@ -110,6 +116,12 @@ class SocialMediaItem(Base):
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
     category: Mapped[str | None] = mapped_column(String(120), nullable=True)
     alt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # AI suggestions (Phase 3) require approval before they replace the real fields.
+    ai_status: Mapped[AiStatus] = mapped_column(Enum(AiStatus), default=AiStatus.none)
+    ai_suggested_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_suggested_category: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ai_suggested_alt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_suggested_caption: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

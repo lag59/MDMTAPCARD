@@ -114,6 +114,12 @@ class Settings(BaseSettings):
     TIKTOK_CLIENT_SECRET: str = ""
     SOCIAL_SYNC_INTERVAL_HOURS: int = 6
 
+    # Phase 3: AI suggestions (approval-gated) and Netlify build debounce.
+    AI_PROVIDER: str = "heuristic"  # heuristic | openai
+    OPENAI_API_KEY: str = ""
+    AI_MODEL: str = "gpt-4o-mini"
+    NETLIFY_BUILD_DEBOUNCE_SECONDS: int = 60
+
     # Admin notification email (e.g. custom design requests needing manual follow-up)
     ADMIN_NOTIFICATION_EMAIL: str = "andrea@andreabilingualcpr.com"
     # Mailbox is Microsoft 365 (via GoDaddy) per DNS (MX -> ppe-hosted.com, autodiscover -> outlook.com),

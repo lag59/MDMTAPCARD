@@ -9,8 +9,12 @@ import {
   createWebsiteApiKey,
   revokeWebsiteApiKey,
   regenerateWebsiteApiKey,
+  setBuildHook,
+  clearBuildHook,
+  getSocialAnalytics,
   type WebsiteFeedSettings,
   type WebsiteApiKeyInfo,
+  type SocialAnalytics,
 } from "@/lib/api";
 
 const PLATFORMS = ["instagram", "facebook", "tiktok"] as const;
@@ -25,6 +29,8 @@ export default function WebsiteFeedPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [newRawKey, setNewRawKey] = useState<string | null>(null);
   const [keyName, setKeyName] = useState("Website key");
+  const [analytics, setAnalytics] = useState<SocialAnalytics | null>(null);
+  const [buildHookUrl, setBuildHookUrl] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -32,6 +38,11 @@ export default function WebsiteFeedPage() {
         const [f, k] = await Promise.all([getWebsiteFeed(), listWebsiteApiKeys()]);
         setFeed(f);
         setKeys(k);
+        try {
+          setAnalytics(await getSocialAnalytics());
+        } catch {
+          // analytics is best-effort
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not load website feed.");
       } finally {
@@ -110,6 +121,29 @@ export default function WebsiteFeedPage() {
   };
 
   const copy = (text: string) => navigator.clipboard?.writeText(text);
+
+  const saveBuildHook = async () => {
+    setError(null);
+    try {
+      const res = await setBuildHook(buildHookUrl.trim());
+      setFeed((f) => (f ? { ...f, has_build_hook: res.has_build_hook } : f));
+      setBuildHookUrl("");
+      setSuccess("Netlify build hook saved.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save build hook.");
+    }
+  };
+
+  const removeBuildHook = async () => {
+    setError(null);
+    try {
+      await clearBuildHook();
+      setFeed((f) => (f ? { ...f, has_build_hook: false } : f));
+      setSuccess("Netlify build hook removed.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove build hook.");
+    }
+  };
 
   if (loading) return <div className="text-sm text-slate-500">Loading website feed…</div>;
   if (!feed) return <div className="text-sm text-red-600">{error ?? "No feed available."}</div>;
@@ -201,6 +235,44 @@ export default function WebsiteFeedPage() {
       </section>
 
       <section className={box}>
+        <h2 className="text-lg font-semibold text-slate-800">Netlify Build Hook</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Optional. When set and &quot;Trigger a Netlify rebuild on approval&quot; is on, approving/hiding media
+          triggers a debounced site rebuild. The URL is encrypted and never exposed to the browser.
+        </p>
+        <p className="mt-2 text-xs font-medium text-slate-600">
+          Status: {feed.has_build_hook ? "configured" : "not set"}
+        </p>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={buildHookUrl}
+            onChange={(e) => setBuildHookUrl(e.target.value)}
+            placeholder="https://api.netlify.com/build_hooks/xxxx"
+            className="flex-1 rounded-md border border-slate-300 px-3 py-2 font-mono text-xs"
+          />
+          <button onClick={saveBuildHook} className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700">Save</button>
+          {feed.has_build_hook ? (
+            <button onClick={removeBuildHook} className="rounded-md border border-red-300 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50">Remove</button>
+          ) : null}
+        </div>
+      </section>
+
+      {analytics ? (
+        <section className={box}>
+          <h2 className="text-lg font-semibold text-slate-800">Content Analytics</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="Approved" value={analytics.by_status["approved"] ?? 0} />
+            <Stat label="Pending" value={analytics.by_status["pending"] ?? 0} />
+            <Stat label="Hidden" value={analytics.by_status["hidden"] ?? 0} />
+            <Stat label="Featured" value={analytics.featured} />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Last sync: {analytics.last_sync_at ? new Date(analytics.last_sync_at).toLocaleString() : "never"}
+          </p>
+        </section>
+      ) : null}
+
+      <section className={box}>
         <h2 className="text-lg font-semibold text-slate-800">API Keys</h2>
         {newRawKey ? (
           <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3">
@@ -239,6 +311,15 @@ export default function WebsiteFeedPage() {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+      <div className="text-xl font-bold text-slate-800">{value}</div>
+      <div className="text-xs text-slate-500">{label}</div>
     </div>
   );
 }

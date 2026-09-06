@@ -283,6 +283,11 @@ async def _schema_guard_startup() -> None:
         )
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_media_items_business_id ON social_media_items(business_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_media_items_approval_status ON social_media_items(approval_status)"))
+        await conn.execute(text("ALTER TABLE social_media_items ADD COLUMN IF NOT EXISTS ai_status VARCHAR(20) NOT NULL DEFAULT 'none'"))
+        await conn.execute(text("ALTER TABLE social_media_items ADD COLUMN IF NOT EXISTS ai_suggested_title TEXT NULL"))
+        await conn.execute(text("ALTER TABLE social_media_items ADD COLUMN IF NOT EXISTS ai_suggested_category VARCHAR(120) NULL"))
+        await conn.execute(text("ALTER TABLE social_media_items ADD COLUMN IF NOT EXISTS ai_suggested_alt_text TEXT NULL"))
+        await conn.execute(text("ALTER TABLE social_media_items ADD COLUMN IF NOT EXISTS ai_suggested_caption TEXT NULL"))
 
         await conn.execute(
             text(

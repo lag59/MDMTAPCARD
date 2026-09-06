@@ -16,6 +16,7 @@ from app.models.company import Company
 from app.models.social import (
     ApiKeyStatus,
     ApprovalStatus,
+    AiStatus,
     ConnectionStatus,
     FeedLayout,
     FeedStatus,
@@ -27,6 +28,8 @@ from app.models.social import (
 )
 from app.models.user import User, UserRole
 from app.services import social_oauth
+from app.services import ai_suggestions
+from app.services import netlify
 from app.services.social_sync import sync_business
 from app.utils.crypto import encrypt_token, generate_api_key
 
@@ -110,7 +113,20 @@ def _item_out(item: SocialMediaItem) -> dict:
         "approval_status": item.approval_status.value,
         "featured": item.featured,
         "category": item.category,
+        "ai_status": item.ai_status.value,
+        "ai_suggested_title": item.ai_suggested_title,
+        "ai_suggested_category": item.ai_suggested_category,
+        "ai_suggested_alt_text": item.ai_suggested_alt_text,
+        "ai_suggested_caption": item.ai_suggested_caption,
     }
+
+
+async def _schedule_feed_build(db: AsyncSession, business_id: uuid.UUID) -> None:
+    feed = (
+        await db.execute(select(WebsiteFeed).where(WebsiteFeed.business_id == business_id))
+    ).scalar_one_or_none()
+    if feed:
+        netlify.schedule_build(feed)
 
 
 # ── Website feed settings ────────────────────────────────────────────────────
@@ -242,6 +258,8 @@ async def update_media(
 
     await db.commit()
     await db.refresh(item)
+    if "approval_status" in updates:
+        await _schedule_feed_build(db, bid)
     return _item_out(item)
 
 
@@ -281,7 +299,140 @@ async def bulk_media(
             raise HTTPException(status_code=400, detail="Unsupported bulk action")
 
     await db.commit()
+    if action in status_map:
+        await _schedule_feed_build(db, bid)
     return {"updated": len(rows)}
+
+
+# ── Netlify build hook (Phase 3) ─────────────────────────────────────────────
+
+class BuildHookUpdate(BaseModel):
+    url: str
+
+
+@router.post("/feed/build-hook")
+async def set_build_hook(
+    body: BuildHookUpdate,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
+    feed = await _get_or_create_feed(db, tenant_id, bid)
+    url = body.url.strip()
+    if url and not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="Build hook URL must be https")
+    feed.netlify_build_hook_url_encrypted = encrypt_token(url) if url else None
+    await db.commit()
+    return {"has_build_hook": bool(feed.netlify_build_hook_url_encrypted)}
+
+
+@router.delete("/feed/build-hook")
+async def clear_build_hook(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
+    feed = await _get_or_create_feed(db, tenant_id, bid)
+    feed.netlify_build_hook_url_encrypted = None
+    await db.commit()
+    return {"has_build_hook": False}
+
+
+# ── AI suggestions (Phase 3, approval-gated) ─────────────────────────────────
+
+@router.post("/media/{item_id}/ai-suggest")
+async def ai_suggest(
+    item_id: uuid.UUID,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+    item = await db.get(SocialMediaItem, item_id)
+    if not item or item.business_id != bid:
+        raise HTTPException(status_code=404, detail="Media item not found")
+
+    suggestion = await ai_suggestions.suggest(item.caption, item.platform.value)
+    item.ai_suggested_title = suggestion.get("title")
+    item.ai_suggested_category = (slugify(suggestion["category"])[:120] if suggestion.get("category") else None)
+    item.ai_suggested_alt_text = suggestion.get("alt_text")
+    item.ai_suggested_caption = suggestion.get("caption")
+    item.ai_status = AiStatus.suggested
+    await db.commit()
+    await db.refresh(item)
+    return _item_out(item)
+
+
+@router.post("/media/{item_id}/apply-suggestions")
+async def apply_suggestions(
+    item_id: uuid.UUID,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+    item = await db.get(SocialMediaItem, item_id)
+    if not item or item.business_id != bid:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    if item.ai_status != AiStatus.suggested:
+        raise HTTPException(status_code=400, detail="No pending AI suggestions to apply")
+
+    # Sanitize the same way manual edits are sanitized.
+    if item.ai_suggested_caption:
+        item.caption = html.escape(item.ai_suggested_caption)[:2000]
+    if item.ai_suggested_alt_text:
+        item.alt_text = html.escape(item.ai_suggested_alt_text)[:500]
+    if item.ai_suggested_category:
+        item.category = slugify(item.ai_suggested_category)[:120] or None
+    item.ai_status = AiStatus.applied
+    await db.commit()
+    await db.refresh(item)
+    return _item_out(item)
+
+
+# ── Analytics ────────────────────────────────────────────────────────────────
+
+@router.get("/analytics")
+async def social_analytics(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+
+    status_rows = (
+        await db.execute(
+            select(SocialMediaItem.approval_status, func.count())
+            .where(SocialMediaItem.business_id == bid)
+            .group_by(SocialMediaItem.approval_status)
+        )
+    ).all()
+    platform_rows = (
+        await db.execute(
+            select(SocialMediaItem.platform, func.count())
+            .where(SocialMediaItem.business_id == bid)
+            .group_by(SocialMediaItem.platform)
+        )
+    ).all()
+    featured = (
+        await db.execute(
+            select(func.count()).where(SocialMediaItem.business_id == bid, SocialMediaItem.featured == True)  # noqa: E712
+        )
+    ).scalar() or 0
+    last_sync = (
+        await db.execute(
+            select(func.max(SocialConnection.last_sync_at)).where(SocialConnection.business_id == bid)
+        )
+    ).scalar()
+
+    return {
+        "by_status": {s.value: c for s, c in status_rows},
+        "by_platform": {p.value: c for p, c in platform_rows},
+        "featured": featured,
+        "last_sync_at": last_sync.isoformat() if last_sync else None,
+    }
 
 
 # ── Social connections (Phase 2 wires OAuth connect) ─────────────────────────

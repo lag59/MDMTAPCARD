@@ -5,6 +5,8 @@ import {
   listSocialMedia,
   updateSocialMedia,
   bulkSocialMedia,
+  aiSuggestMedia,
+  applyMediaSuggestions,
   type SocialMediaItem,
 } from "@/lib/api";
 
@@ -67,6 +69,24 @@ export default function AutoGalleryPage() {
       await load(filter);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Bulk action failed.");
+    }
+  };
+
+  const aiSuggest = async (id: string) => {
+    try {
+      const updated = await aiSuggestMedia(id);
+      setItems((all) => all.map((i) => (i.id === id ? updated : i)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI suggestion failed.");
+    }
+  };
+
+  const applySuggestions = async (id: string) => {
+    try {
+      const updated = await applyMediaSuggestions(id);
+      setItems((all) => all.map((i) => (i.id === id ? updated : i)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not apply suggestions.");
     }
   };
 
@@ -156,6 +176,22 @@ export default function AutoGalleryPage() {
                     <input defaultValue={item.caption ?? ""} onBlur={(e) => e.target.value !== (item.caption ?? "") && patchItem(item.id, { caption: e.target.value })} placeholder="Caption" className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
                     <input defaultValue={item.alt_text ?? ""} onBlur={(e) => e.target.value !== (item.alt_text ?? "") && patchItem(item.id, { alt_text: e.target.value })} placeholder="Alt text" className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
                     <input defaultValue={item.category ?? ""} onBlur={(e) => e.target.value !== (item.category ?? "") && patchItem(item.id, { category: e.target.value })} placeholder="Category" className="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      <button onClick={() => aiSuggest(item.id)} className="rounded border border-violet-300 px-2 py-0.5 text-[10px] text-violet-700">AI suggest</button>
+                      {item.ai_status === "suggested" ? (
+                        <button onClick={() => applySuggestions(item.id)} className="rounded border border-emerald-300 px-2 py-0.5 text-[10px] text-emerald-700">Apply suggestions</button>
+                      ) : null}
+                    </div>
+                    {item.ai_status === "suggested" ? (
+                      <div className="rounded bg-violet-50 p-2 text-[10px] text-violet-900">
+                        <p><strong>Title:</strong> {item.ai_suggested_title || "—"}</p>
+                        <p><strong>Category:</strong> {item.ai_suggested_category || "—"}</p>
+                        <p><strong>Alt:</strong> {item.ai_suggested_alt_text || "—"}</p>
+                        <p><strong>Caption:</strong> {item.ai_suggested_caption || "—"}</p>
+                        <p className="mt-1 text-violet-500">Review, then Apply to publish these.</p>
+                      </div>
+                    ) : null}
+                    {item.ai_status === "applied" ? <p className="text-[10px] text-emerald-600">AI suggestions applied.</p> : null}
                   </div>
                 </details>
               </div>

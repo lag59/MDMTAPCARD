@@ -269,6 +269,11 @@ export type SocialMediaItem = {
   approval_status: "pending" | "approved" | "hidden" | "rejected";
   featured: boolean;
   category: string | null;
+  ai_status?: "none" | "suggested" | "applied";
+  ai_suggested_title?: string | null;
+  ai_suggested_category?: string | null;
+  ai_suggested_alt_text?: string | null;
+  ai_suggested_caption?: string | null;
 };
 
 export type SocialConnectionInfo = {
@@ -342,6 +347,33 @@ export async function revokeWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo
 
 export async function regenerateWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo> {
   return apiPost<WebsiteApiKeyInfo>(`/api/v1/social/api-keys/${id}/regenerate`, {});
+}
+
+export async function setBuildHook(url: string): Promise<{ has_build_hook: boolean }> {
+  return apiPost<{ has_build_hook: boolean }>("/api/v1/social/feed/build-hook", { url });
+}
+
+export async function clearBuildHook(): Promise<{ has_build_hook: boolean }> {
+  return apiDeleteJson<{ has_build_hook: boolean }>("/api/v1/social/feed/build-hook");
+}
+
+export async function aiSuggestMedia(id: string): Promise<SocialMediaItem> {
+  return apiPost<SocialMediaItem>(`/api/v1/social/media/${id}/ai-suggest`, {});
+}
+
+export async function applyMediaSuggestions(id: string): Promise<SocialMediaItem> {
+  return apiPost<SocialMediaItem>(`/api/v1/social/media/${id}/apply-suggestions`, {});
+}
+
+export type SocialAnalytics = {
+  by_status: Record<string, number>;
+  by_platform: Record<string, number>;
+  featured: number;
+  last_sync_at: string | null;
+};
+
+export async function getSocialAnalytics(): Promise<SocialAnalytics> {
+  return apiGet<SocialAnalytics>("/api/v1/social/analytics");
 }
 
 export type ImportedTemplate = {
