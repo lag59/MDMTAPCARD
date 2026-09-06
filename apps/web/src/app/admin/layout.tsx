@@ -64,6 +64,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ["Digital Cards", "/admin/cards"],
           ["Leads", "/admin/leads"],
           ["Templates", "/admin/templates"],
+          ["Social Connections", "/admin/social-connections"],
+          ["AutoGallery", "/admin/autogallery"],
+          ["Website Feed", "/admin/website-feed"],
           ["NFC Inventory", "/admin/nfc"],
           ...(["super_admin", "business_owner"].includes(userRole ?? "")
             ? [["Desktop Programmer", "/admin/nfc/desktop"] as const]

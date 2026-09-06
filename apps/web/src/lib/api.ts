@@ -239,6 +239,103 @@ export async function uploadTemplateBackgroundImage(themeId: string, file: File)
   return (await res.json()) as TemplateBackgroundInfo;
 }
 
+// ── Social content system (Phase 1) ─────────────────────────────────────────
+
+export type WebsiteFeedSettings = {
+  id: string;
+  name: string;
+  slug: string;
+  status: "active" | "disabled";
+  require_approval: boolean;
+  auto_publish: boolean;
+  auto_sync: boolean;
+  max_items: number;
+  platforms: string[];
+  layout: "grid" | "masonry" | "carousel" | "featured-first";
+  trigger_build_on_approval: boolean;
+  has_build_hook: boolean;
+};
+
+export type SocialMediaItem = {
+  id: string;
+  platform: "instagram" | "facebook" | "tiktok";
+  type: "image" | "video" | "carousel";
+  media_url: string | null;
+  thumbnail_url: string | null;
+  caption: string | null;
+  alt_text: string | null;
+  post_url: string | null;
+  published_at: string | null;
+  approval_status: "pending" | "approved" | "hidden" | "rejected";
+  featured: boolean;
+  category: string | null;
+};
+
+export type SocialConnectionInfo = {
+  platform: "instagram" | "facebook" | "tiktok";
+  status: string;
+  username: string | null;
+  last_sync_at: string | null;
+  connected_at: string | null;
+  last_error: string | null;
+};
+
+export type WebsiteApiKeyInfo = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  status: "active" | "revoked";
+  last_used_at: string | null;
+  created_at: string | null;
+  revoked_at: string | null;
+  raw_key?: string;
+};
+
+export async function getWebsiteFeed(): Promise<WebsiteFeedSettings> {
+  return apiGet<WebsiteFeedSettings>("/api/v1/social/feed");
+}
+
+export async function updateWebsiteFeed(updates: Partial<Omit<WebsiteFeedSettings, "id" | "has_build_hook">>): Promise<WebsiteFeedSettings> {
+  return apiPatch<WebsiteFeedSettings>("/api/v1/social/feed", updates);
+}
+
+export async function listSocialMedia(params: Record<string, string> = {}): Promise<SocialMediaItem[]> {
+  const query = new URLSearchParams(params).toString();
+  return apiGet<SocialMediaItem[]>(`/api/v1/social/media${query ? `?${query}` : ""}`);
+}
+
+export async function updateSocialMedia(id: string, updates: Partial<Pick<SocialMediaItem, "approval_status" | "featured" | "caption" | "alt_text" | "category">>): Promise<SocialMediaItem> {
+  return apiPatch<SocialMediaItem>(`/api/v1/social/media/${id}`, updates);
+}
+
+export async function bulkSocialMedia(ids: string[], action: "approve" | "hide" | "reject" | "feature" | "unfeature"): Promise<{ updated: number }> {
+  return apiPost<{ updated: number }>("/api/v1/social/media/bulk", { ids, action });
+}
+
+export async function listSocialConnections(): Promise<SocialConnectionInfo[]> {
+  return apiGet<SocialConnectionInfo[]>("/api/v1/social/connections");
+}
+
+export async function disconnectSocial(platform: string): Promise<void> {
+  await apiPost(`/api/v1/social/connections/${platform}/disconnect`, {});
+}
+
+export async function listWebsiteApiKeys(): Promise<WebsiteApiKeyInfo[]> {
+  return apiGet<WebsiteApiKeyInfo[]>("/api/v1/social/api-keys");
+}
+
+export async function createWebsiteApiKey(name: string): Promise<WebsiteApiKeyInfo> {
+  return apiPost<WebsiteApiKeyInfo>("/api/v1/social/api-keys", { name });
+}
+
+export async function revokeWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo> {
+  return apiPost<WebsiteApiKeyInfo>(`/api/v1/social/api-keys/${id}/revoke`, {});
+}
+
+export async function regenerateWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo> {
+  return apiPost<WebsiteApiKeyInfo>(`/api/v1/social/api-keys/${id}/regenerate`, {});
+}
+
 export type ImportedTemplate = {
   id: string;
   name: string;

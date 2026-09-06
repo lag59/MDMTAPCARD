@@ -1,0 +1,100 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { listSocialConnections, disconnectSocial, type SocialConnectionInfo } from "@/lib/api";
+
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+};
+
+export default function SocialConnectionsPage() {
+  const [connections, setConnections] = useState<SocialConnectionInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setConnections(await listSocialConnections());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load connections.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const disconnect = async (platform: string) => {
+    try {
+      await disconnectSocial(platform);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disconnect.");
+    }
+  };
+
+  const isConnected = (c: SocialConnectionInfo) => c.status === "connected";
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <h1 className="text-2xl font-bold text-slate-800">Social Connections</h1>
+      <p className="text-sm text-slate-500">
+        Connect your accounts so MDM TapCard can import your recent posts. We use each platform&apos;s official
+        login — you never enter your social password here.
+      </p>
+
+      {error ? <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+      {info ? <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">{info}</div> : null}
+
+      {loading ? (
+        <div className="text-sm text-slate-500">Loading connections…</div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {connections.map((c) => (
+            <div key={c.platform} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-slate-800">{PLATFORM_LABELS[c.platform] ?? c.platform}</h2>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isConnected(c) ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                  {isConnected(c) ? "Connected" : "Not Connected"}
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-1 text-xs text-slate-500">
+                <p>Account: {c.username ?? "—"}</p>
+                <p>Last sync: {c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : "never"}</p>
+                {c.last_error ? <p className="text-red-500">Error: {c.last_error}</p> : null}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setInfo("Account connection uses the official OAuth flow and ships in Phase 2.")}
+                  className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  {isConnected(c) ? "Reconnect" : "Connect"}
+                </button>
+                {isConnected(c) ? (
+                  <button onClick={() => disconnect(c.platform)} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
+                    Disconnect
+                  </button>
+                ) : null}
+                <button
+                  onClick={() => setInfo("Sync runs automatically every 6 hours once an account is connected (Phase 2).")}
+                  disabled={!isConnected(c)}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Sync Now
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

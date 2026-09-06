@@ -90,6 +90,14 @@ class Settings(BaseSettings):
     # entering one. Leave blank to auto-generate a strong random password instead.
     DEFAULT_TEMP_PASSWORD: str = ""
 
+    # Social content system. Fernet key used to encrypt OAuth tokens at rest.
+    # Leave blank to derive a key from SECRET_KEY (set a dedicated key in prod).
+    SOCIAL_TOKEN_ENCRYPTION_KEY: str = ""
+    SOCIAL_SYNC_ENABLED: bool = False
+    # Public gallery CORS: comma-separated origins allowed to call the gallery
+    # API directly from a browser. Server-side (Netlify) callers don't need this.
+    GALLERY_ALLOWED_ORIGINS: str = "*"
+
     # Admin notification email (e.g. custom design requests needing manual follow-up)
     ADMIN_NOTIFICATION_EMAIL: str = "andrea@andreabilingualcpr.com"
     # Mailbox is Microsoft 365 (via GoDaddy) per DNS (MX -> ppe-hosted.com, autodiscover -> outlook.com),
