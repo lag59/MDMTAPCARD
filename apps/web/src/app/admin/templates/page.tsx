@@ -455,6 +455,8 @@ function TemplateBackgroundManager({
     <div className="mt-3 w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-left">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Template background (shared by every profile using this template)</p>
 
+      <p className="mt-1 text-[11px] text-slate-400">Recommended: 1080 × 1920 px (9:16 portrait). Keep the subject centered with a 10–15% safe margin; edges crop on wider screens.</p>
+
       {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
       {locked ? <p className="mt-2 text-xs text-amber-700">Locked by a super admin. Only a super admin can change this background.</p> : null}
 

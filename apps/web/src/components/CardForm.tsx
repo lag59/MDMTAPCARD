@@ -414,6 +414,10 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
             Upload a background image saved only to this profile. It applies to this person&apos;s card
             only and is not shared with any template or other profiles.
           </p>
+          <p className="text-xs text-slate-400 mb-3">
+            Recommended: 1080 × 1920 px (9:16 portrait). Keep your subject centered with a 10–15% safe
+            margin — edges crop on wider screens, and the top/bottom sit behind the name and buttons.
+          </p>
           {backgroundUrl ? (
             <div className="flex items-center gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
