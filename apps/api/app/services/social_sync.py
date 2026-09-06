@@ -71,14 +71,19 @@ async def sync_business(db: AsyncSession, tenant_id, business_id) -> SyncResult:
         for item in items:
             existing = (
                 await db.execute(
-                    select(SocialMediaItem.id).where(
+                    select(SocialMediaItem).where(
                         SocialMediaItem.business_id == business_id,
                         SocialMediaItem.platform == conn.platform,
                         SocialMediaItem.external_media_id == item.external_media_id,
                     )
                 )
-            ).first()
+            ).scalar_one_or_none()
             if existing:
+                # Refresh time-limited platform CDN URLs so approved media keeps
+                # rendering after the original URLs expire. Approval/edits are kept.
+                existing.media_url = item.media_url
+                existing.thumbnail_url = item.thumbnail_url
+                existing.post_url = item.post_url
                 result.skipped += 1
                 continue
 

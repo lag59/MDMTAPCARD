@@ -20,6 +20,7 @@ from app.models.social import (
     ConnectionStatus,
     FeedLayout,
     FeedStatus,
+    SocialAuditEvent,
     SocialConnection,
     SocialMediaItem,
     SocialPlatform,
@@ -127,6 +128,19 @@ async def _schedule_feed_build(db: AsyncSession, business_id: uuid.UUID) -> None
     ).scalar_one_or_none()
     if feed:
         netlify.schedule_build(feed)
+
+
+def _audit(db: AsyncSession, tenant_id, business_id, actor_id, action: str, item_id=None, detail: str | None = None) -> None:
+    db.add(
+        SocialAuditEvent(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            actor_user_id=actor_id,
+            item_id=item_id,
+            action=action,
+            detail=detail,
+        )
+    )
 
 
 # ── Website feed settings ────────────────────────────────────────────────────
@@ -238,7 +252,7 @@ async def update_media(
     db: Annotated[AsyncSession, Depends(get_db)],
     business_id: uuid.UUID | None = None,
 ) -> dict:
-    _, bid = await _resolve_scope(current_user, db, business_id)
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     item = await db.get(SocialMediaItem, item_id)
     if not item or item.business_id != bid:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -253,8 +267,10 @@ async def update_media(
         item.category = slugify(str(updates["category"]))[:120] or None
     if "approval_status" in updates and updates["approval_status"] is not None:
         item.approval_status = updates["approval_status"]
+        _audit(db, tenant_id, bid, current_user.id, f"media.{updates['approval_status'].value}", item.id)
     if "featured" in updates and updates["featured"] is not None:
         item.featured = updates["featured"]
+        _audit(db, tenant_id, bid, current_user.id, "media.featured" if updates["featured"] else "media.unfeatured", item.id)
 
     await db.commit()
     await db.refresh(item)
@@ -270,7 +286,7 @@ async def bulk_media(
     db: Annotated[AsyncSession, Depends(get_db)],
     business_id: uuid.UUID | None = None,
 ) -> dict:
-    _, bid = await _resolve_scope(current_user, db, business_id)
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     if not body.ids:
         return {"updated": 0}
 
@@ -297,6 +313,7 @@ async def bulk_media(
             item.featured = False
         else:
             raise HTTPException(status_code=400, detail="Unsupported bulk action")
+        _audit(db, tenant_id, bid, current_user.id, f"media.bulk_{action}", item.id)
 
     await db.commit()
     if action in status_map:
@@ -372,7 +389,7 @@ async def apply_suggestions(
     db: Annotated[AsyncSession, Depends(get_db)],
     business_id: uuid.UUID | None = None,
 ) -> dict:
-    _, bid = await _resolve_scope(current_user, db, business_id)
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     item = await db.get(SocialMediaItem, item_id)
     if not item or item.business_id != bid:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -387,9 +404,40 @@ async def apply_suggestions(
     if item.ai_suggested_category:
         item.category = slugify(item.ai_suggested_category)[:120] or None
     item.ai_status = AiStatus.applied
+    _audit(db, tenant_id, bid, current_user.id, "media.ai_applied", item.id)
     await db.commit()
     await db.refresh(item)
     return _item_out(item)
+
+
+@router.get("/audit")
+async def list_audit(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+    limit: int = Query(50, ge=1, le=200),
+) -> list[dict]:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+    rows = (
+        await db.execute(
+            select(SocialAuditEvent, User.name)
+            .outerjoin(User, User.id == SocialAuditEvent.actor_user_id)
+            .where(SocialAuditEvent.business_id == bid)
+            .order_by(SocialAuditEvent.created_at.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [
+        {
+            "id": str(ev.id),
+            "action": ev.action,
+            "actor": actor_name,
+            "item_id": str(ev.item_id) if ev.item_id else None,
+            "detail": ev.detail,
+            "created_at": ev.created_at.isoformat() if ev.created_at else None,
+        }
+        for ev, actor_name in rows
+    ]
 
 
 # ── Analytics ────────────────────────────────────────────────────────────────

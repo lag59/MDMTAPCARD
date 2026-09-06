@@ -336,6 +336,25 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_website_api_keys_business_id ON website_api_keys(business_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_website_api_keys_key_hash ON website_api_keys(key_hash)"))
 
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS social_audit_events (
+                    id UUID PRIMARY KEY,
+                    tenant_id UUID NOT NULL,
+                    business_id UUID NOT NULL REFERENCES companies(id),
+                    actor_user_id UUID NULL REFERENCES users(id),
+                    item_id UUID NULL,
+                    action VARCHAR(64) NOT NULL,
+                    detail TEXT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_audit_events_business_id ON social_audit_events(business_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_audit_events_created_at ON social_audit_events(created_at)"))
+
         # Enum evolution is still handled by Alembic migrations.
 
 
