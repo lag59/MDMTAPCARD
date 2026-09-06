@@ -2,6 +2,8 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
 import httpx
@@ -63,7 +65,7 @@ class CompanyUpdate(BaseModel):
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
-    password: str
+    password: str | None = None
     role: UserRole
     company_id: uuid.UUID | None = None
     phone: str | None = None
@@ -152,6 +154,13 @@ def _login_url() -> str:
     return "https://tap.mdmcreation.com/login"
 
 
+def _generate_temp_password() -> str:
+    """Strong, readable 12-char temporary password (avoids ambiguous chars)."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    core = "".join(secrets.choice(alphabet) for _ in range(11))
+    return core + "!"
+
+
 def _credentials_message(name: str, email: str, password: str) -> str:
     first = (name or "").strip().split(" ")[0] or "there"
     return (
@@ -161,6 +170,43 @@ def _credentials_message(name: str, email: str, password: str) -> str:
         f"Temporary password: {password}\n"
         "Please change your password after your first login."
     )
+
+
+async def _resolve_card_phone(db: AsyncSession, user: User) -> str | None:
+    """Best-effort lookup of a phone number from the user's card (Profile).
+
+    Users and profiles are only linked through their company, so we match a
+    profile in the same company by email, then by display name, and finally
+    fall back to the sole card when the company has exactly one.
+    """
+    if not user.company_id:
+        return None
+
+    base = select(Profile).where(
+        Profile.company_id == user.company_id,
+        Profile.is_deleted == False,  # noqa: E712
+        Profile.phone.isnot(None),
+        Profile.phone != "",
+    )
+
+    if user.email:
+        by_email = (
+            await db.execute(base.where(func.lower(Profile.email) == user.email.lower()))
+        ).scalars().first()
+        if by_email:
+            return by_email.phone
+
+    if user.name:
+        by_name = (
+            await db.execute(base.where(func.lower(Profile.display_name) == user.name.strip().lower()))
+        ).scalars().first()
+        if by_name:
+            return by_name.phone
+
+    cards = (await db.execute(base)).scalars().all()
+    if len(cards) == 1:
+        return cards[0].phone
+    return None
 
 
 def _is_bundle_plan(plan: SubscriptionPlan) -> bool:
@@ -1197,10 +1243,15 @@ async def create_user(
     if body.send_credentials_sms and not phone:
         raise HTTPException(status_code=400, detail="A phone number is required to text credentials")
 
+    # Password precedence: admin-entered -> configured default -> generated.
+    password = (body.password or "").strip() or settings.DEFAULT_TEMP_PASSWORD.strip() or _generate_temp_password()
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
     user = User(
         name=body.name,
         email=body.email,
-        hashed_password=hash_password(body.password),
+        hashed_password=hash_password(password),
         role=body.role,
         company_id=company_id,
         phone=phone or None,
@@ -1211,9 +1262,15 @@ async def create_user(
 
     sms_sent = False
     if body.send_credentials_sms and phone:
-        sms_sent = await send_sms(phone, _credentials_message(user.name, user.email, body.password))
+        sms_sent = await send_sms(phone, _credentials_message(user.name, user.email, password))
 
-    return {"id": str(user.id), "email": user.email, "role": user.role.value, "sms_sent": sms_sent}
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "role": user.role.value,
+        "password": password,
+        "sms_sent": sms_sent,
+    }
 
 
 @router.get("/users")
@@ -1224,10 +1281,46 @@ async def list_users(
     rows = (
         await db.execute(select(User, Company.name.label("company_name")).outerjoin(Company, Company.id == User.company_id).order_by(User.created_at.desc()))
     ).all()
+
+    # Index card phones once so we can resolve a fallback phone per user without N+1 queries.
+    profiles = (
+        await db.execute(
+            select(Profile.company_id, Profile.email, Profile.display_name, Profile.phone).where(
+                Profile.is_deleted == False,  # noqa: E712
+                Profile.phone.isnot(None),
+                Profile.phone != "",
+            )
+        )
+    ).all()
+    by_email: dict[tuple, str] = {}
+    by_name: dict[tuple, str] = {}
+    per_company: dict[uuid.UUID, set] = {}
+    for company_id, p_email, p_name, p_phone in profiles:
+        if p_email:
+            by_email.setdefault((company_id, p_email.lower()), p_phone)
+        if p_name:
+            by_name.setdefault((company_id, p_name.strip().lower()), p_phone)
+        per_company.setdefault(company_id, set()).add(p_phone)
+
+    def resolve_phone(user: User) -> str | None:
+        if user.phone:
+            return user.phone
+        if not user.company_id:
+            return None
+        if user.email and (hit := by_email.get((user.company_id, user.email.lower()))):
+            return hit
+        if user.name and (hit := by_name.get((user.company_id, user.name.strip().lower()))):
+            return hit
+        phones = per_company.get(user.company_id)
+        if phones and len(phones) == 1:
+            return next(iter(phones))
+        return None
+
     return [{
         "id": str(user.id), "name": user.name, "email": user.email, "role": user.role.value,
         "company_id": str(user.company_id) if user.company_id else None, "company_name": company_name,
-        "phone": user.phone, "is_active": user.is_active, "is_deleted": user.is_deleted,
+        "phone": user.phone, "card_phone": resolve_phone(user),
+        "is_active": user.is_active, "is_deleted": user.is_deleted,
     } for user, company_name in rows]
 
 
@@ -1295,7 +1388,9 @@ async def text_user_credentials(
 
     phone = normalize_phone(body.phone or "") or normalize_phone(user.phone or "")
     if not phone:
-        raise HTTPException(status_code=400, detail="A phone number is required to text credentials")
+        phone = normalize_phone(await _resolve_card_phone(db, user) or "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="No phone number found on the user or their card. Provide one to text credentials.")
 
     password = (body.password or "").strip()
     if not password:

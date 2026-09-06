@@ -86,6 +86,10 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_FROM_NUMBER: str = ""
 
+    # Default temporary password applied when an admin creates a user without
+    # entering one. Leave blank to auto-generate a strong random password instead.
+    DEFAULT_TEMP_PASSWORD: str = ""
+
     # Admin notification email (e.g. custom design requests needing manual follow-up)
     ADMIN_NOTIFICATION_EMAIL: str = "andrea@andreabilingualcpr.com"
     # Mailbox is Microsoft 365 (via GoDaddy) per DNS (MX -> ppe-hosted.com, autodiscover -> outlook.com),

@@ -17,6 +17,7 @@ type UserCreateResponse = {
   id: string;
   email: string;
   role: string;
+  password?: string;
   sms_sent?: boolean;
 };
 
@@ -28,6 +29,7 @@ type ManagedUser = {
   company_id: string | null;
   company_name: string | null;
   phone: string | null;
+  card_phone: string | null;
   is_active: boolean;
 };
 
@@ -80,6 +82,13 @@ export default function AdminUsersPage() {
     };
   }, []);
 
+  const generatePassword = () => {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const arr = new Uint32Array(11);
+    crypto.getRandomValues(arr);
+    return Array.from(arr, (n) => alphabet[n % alphabet.length]).join("") + "!";
+  };
+
   const roleOptions = useMemo(() => {
     if (me?.role === "super_admin") {
       return ["employee", "programmer", "business_owner", "super_admin"];
@@ -92,8 +101,8 @@ export default function AdminUsersPage() {
     setError(null);
     setSuccess(null);
 
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError("Name, email, and password are required.");
+    if (!name.trim() || !email.trim()) {
+      setError("Name and email are required.");
       return;
     }
 
@@ -107,21 +116,22 @@ export default function AdminUsersPage() {
       const payload: Record<string, unknown> = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        password,
         role,
       };
 
+      if (password.trim()) payload.password = password;
       if (companyId) payload.company_id = companyId;
       if (phone.trim()) payload.phone = phone.trim();
       if (sendCredentialsSms) payload.send_credentials_sms = true;
 
       const created = await apiPost<UserCreateResponse>("/api/v1/admin/users", payload);
+      const pwNote = password.trim() ? "" : ` Temporary password: ${created.password}`;
       const smsNote = sendCredentialsSms
         ? created.sms_sent
           ? " Credentials texted to the client."
           : " But the credentials SMS could not be sent — check Twilio settings."
         : "";
-      setSuccess(`Created user ${created.email} (${created.role}).${smsNote}`);
+      setSuccess(`Created user ${created.email} (${created.role}).${pwNote}${smsNote}`);
       setPassword("");
       setName("");
       setEmail("");
@@ -156,7 +166,8 @@ export default function AdminUsersPage() {
   const textCredentials = async (user: ManagedUser) => {
     setError(null);
     setSuccess(null);
-    const targetPhone = user.phone || window.prompt(`Mobile number to text ${user.name}'s credentials to:`, "");
+    const knownPhone = user.phone || user.card_phone || "";
+    const targetPhone = knownPhone || window.prompt(`Mobile number to text ${user.name}'s credentials to:`, "");
     if (!targetPhone) return;
     const tempPassword = window.prompt(
       "Enter the temporary password to text (this also resets the user's password, minimum 8 characters):",
@@ -217,14 +228,28 @@ export default function AdminUsersPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Temporary Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Minimum 8 characters"
-          />
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Temporary Password <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="Leave blank to use the default / auto-generate"
+            />
+            <button
+              type="button"
+              onClick={() => setPassword(generatePassword())}
+              className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Generate
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            If left blank, the server applies the configured default password (or a strong random one).
+          </p>
         </div>
 
         <div>
