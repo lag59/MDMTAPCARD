@@ -355,6 +355,76 @@ async def _schema_guard_startup() -> None:
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_audit_events_business_id ON social_audit_events(business_id)"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_social_audit_events_created_at ON social_audit_events(created_at)"))
 
+        await conn.execute(text("ALTER TABLE companies ADD COLUMN IF NOT EXISTS autogallery_plan VARCHAR(30) NOT NULL DEFAULT 'starter'"))
+
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS usage_events (
+                    id UUID PRIMARY KEY,
+                    tenant_id UUID NOT NULL,
+                    business_id UUID NOT NULL REFERENCES companies(id),
+                    event_type VARCHAR(40) NOT NULL,
+                    quantity INTEGER NOT NULL DEFAULT 1,
+                    idempotency_key VARCHAR(120) NULL,
+                    metadata_json TEXT NULL,
+                    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    CONSTRAINT uq_usage_event_idempotency UNIQUE (idempotency_key)
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_usage_events_business_id ON usage_events(business_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_usage_events_event_type ON usage_events(event_type)"))
+
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS usage_monthly_rollups (
+                    id UUID PRIMARY KEY,
+                    tenant_id UUID NOT NULL,
+                    business_id UUID NOT NULL REFERENCES companies(id),
+                    year INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    social_imports INTEGER NOT NULL DEFAULT 0,
+                    social_syncs INTEGER NOT NULL DEFAULT 0,
+                    ai_calls INTEGER NOT NULL DEFAULT 0,
+                    api_requests INTEGER NOT NULL DEFAULT 0,
+                    netlify_rebuilds INTEGER NOT NULL DEFAULT 0,
+                    approved_media INTEGER NOT NULL DEFAULT 0,
+                    published_media INTEGER NOT NULL DEFAULT 0,
+                    storage_bytes BIGINT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    CONSTRAINT uq_usage_rollup_period UNIQUE (tenant_id, business_id, year, month)
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_usage_rollups_business_id ON usage_monthly_rollups(business_id)"))
+
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS engagement_events (
+                    id UUID PRIMARY KEY,
+                    tenant_id UUID NOT NULL,
+                    business_id UUID NOT NULL REFERENCES companies(id),
+                    visitor_session_id VARCHAR(64) NULL,
+                    event_type VARCHAR(40) NOT NULL,
+                    media_id UUID NULL,
+                    page_url TEXT NULL,
+                    referrer TEXT NULL,
+                    metadata_json TEXT NULL,
+                    occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                )
+                """
+            )
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_engagement_events_business_id ON engagement_events(business_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_engagement_events_event_type ON engagement_events(event_type)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_engagement_events_occurred_at ON engagement_events(occurred_at)"))
+
         # Enum evolution is still handled by Alembic migrations.
 
 

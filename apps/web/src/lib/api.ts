@@ -296,73 +296,103 @@ export type WebsiteApiKeyInfo = {
   raw_key?: string;
 };
 
+async function scopedSocialPath(path: string): Promise<string> {
+  if (typeof window === "undefined" || window.localStorage.getItem("user_role") !== "super_admin") {
+    return path;
+  }
+
+  let businessId = window.localStorage.getItem("admin_business_id");
+  if (!businessId) {
+    const companies = await apiGet<Array<{ id: string }>>("/api/v1/admin/companies");
+    businessId = companies[0]?.id ?? null;
+    if (businessId) window.localStorage.setItem("admin_business_id", businessId);
+  }
+  if (!businessId) throw new Error("Select a business before using AutoGallery");
+
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}business_id=${encodeURIComponent(businessId)}`;
+}
+
+export function getAdminBusinessId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem("admin_business_id");
+}
+
+export function setAdminBusinessId(businessId: string): void {
+  window.localStorage.setItem("admin_business_id", businessId);
+}
+
 export async function getWebsiteFeed(): Promise<WebsiteFeedSettings> {
-  return apiGet<WebsiteFeedSettings>("/api/v1/social/feed");
+  return apiGet<WebsiteFeedSettings>(await scopedSocialPath("/api/v1/social/feed"));
 }
 
 export async function updateWebsiteFeed(updates: Partial<Omit<WebsiteFeedSettings, "id" | "has_build_hook">>): Promise<WebsiteFeedSettings> {
-  return apiPatch<WebsiteFeedSettings>("/api/v1/social/feed", updates);
+  return apiPatch<WebsiteFeedSettings>(await scopedSocialPath("/api/v1/social/feed"), updates);
 }
 
 export async function listSocialMedia(params: Record<string, string> = {}): Promise<SocialMediaItem[]> {
-  const query = new URLSearchParams(params).toString();
+  const scopedParams = { ...params };
+  const scopedPath = await scopedSocialPath("/api/v1/social/media");
+  const scope = new URL(scopedPath, "http://localhost").searchParams.get("business_id");
+  if (scope) scopedParams.business_id = scope;
+  const query = new URLSearchParams(scopedParams).toString();
   return apiGet<SocialMediaItem[]>(`/api/v1/social/media${query ? `?${query}` : ""}`);
 }
 
 export async function updateSocialMedia(id: string, updates: Partial<Pick<SocialMediaItem, "approval_status" | "featured" | "caption" | "alt_text" | "category">>): Promise<SocialMediaItem> {
-  return apiPatch<SocialMediaItem>(`/api/v1/social/media/${id}`, updates);
+  return apiPatch<SocialMediaItem>(await scopedSocialPath(`/api/v1/social/media/${id}`), updates);
 }
 
 export async function bulkSocialMedia(ids: string[], action: "approve" | "hide" | "reject" | "feature" | "unfeature"): Promise<{ updated: number }> {
-  return apiPost<{ updated: number }>("/api/v1/social/media/bulk", { ids, action });
+  return apiPost<{ updated: number }>(await scopedSocialPath("/api/v1/social/media/bulk"), { ids, action });
 }
 
 export async function listSocialConnections(): Promise<SocialConnectionInfo[]> {
-  return apiGet<SocialConnectionInfo[]>("/api/v1/social/connections");
+  return apiGet<SocialConnectionInfo[]>(await scopedSocialPath("/api/v1/social/connections"));
 }
 
 export async function disconnectSocial(platform: string): Promise<void> {
-  await apiPost(`/api/v1/social/connections/${platform}/disconnect`, {});
+  await apiPost(await scopedSocialPath(`/api/v1/social/connections/${platform}/disconnect`), {});
 }
 
 export async function getSocialAuthorizeUrl(platform: string): Promise<{ authorize_url: string }> {
-  return apiGet<{ authorize_url: string }>(`/api/v1/social/connections/${platform}/authorize`);
+  return apiGet<{ authorize_url: string }>(await scopedSocialPath(`/api/v1/social/connections/${platform}/authorize`));
 }
 
 export async function syncSocialNow(): Promise<{ imported: number; skipped: number; errors: string[] }> {
-  return apiPost<{ imported: number; skipped: number; errors: string[] }>("/api/v1/social/sync", {});
+  return apiPost<{ imported: number; skipped: number; errors: string[] }>(await scopedSocialPath("/api/v1/social/sync"), {});
 }
 
 export async function listWebsiteApiKeys(): Promise<WebsiteApiKeyInfo[]> {
-  return apiGet<WebsiteApiKeyInfo[]>("/api/v1/social/api-keys");
+  return apiGet<WebsiteApiKeyInfo[]>(await scopedSocialPath("/api/v1/social/api-keys"));
 }
 
 export async function createWebsiteApiKey(name: string): Promise<WebsiteApiKeyInfo> {
-  return apiPost<WebsiteApiKeyInfo>("/api/v1/social/api-keys", { name });
+  return apiPost<WebsiteApiKeyInfo>(await scopedSocialPath("/api/v1/social/api-keys"), { name });
 }
 
 export async function revokeWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo> {
-  return apiPost<WebsiteApiKeyInfo>(`/api/v1/social/api-keys/${id}/revoke`, {});
+  return apiPost<WebsiteApiKeyInfo>(await scopedSocialPath(`/api/v1/social/api-keys/${id}/revoke`), {});
 }
 
 export async function regenerateWebsiteApiKey(id: string): Promise<WebsiteApiKeyInfo> {
-  return apiPost<WebsiteApiKeyInfo>(`/api/v1/social/api-keys/${id}/regenerate`, {});
+  return apiPost<WebsiteApiKeyInfo>(await scopedSocialPath(`/api/v1/social/api-keys/${id}/regenerate`), {});
 }
 
 export async function setBuildHook(url: string): Promise<{ has_build_hook: boolean }> {
-  return apiPost<{ has_build_hook: boolean }>("/api/v1/social/feed/build-hook", { url });
+  return apiPost<{ has_build_hook: boolean }>(await scopedSocialPath("/api/v1/social/feed/build-hook"), { url });
 }
 
 export async function clearBuildHook(): Promise<{ has_build_hook: boolean }> {
-  return apiDeleteJson<{ has_build_hook: boolean }>("/api/v1/social/feed/build-hook");
+  return apiDeleteJson<{ has_build_hook: boolean }>(await scopedSocialPath("/api/v1/social/feed/build-hook"));
 }
 
 export async function aiSuggestMedia(id: string): Promise<SocialMediaItem> {
-  return apiPost<SocialMediaItem>(`/api/v1/social/media/${id}/ai-suggest`, {});
+  return apiPost<SocialMediaItem>(await scopedSocialPath(`/api/v1/social/media/${id}/ai-suggest`), {});
 }
 
 export async function applyMediaSuggestions(id: string): Promise<SocialMediaItem> {
-  return apiPost<SocialMediaItem>(`/api/v1/social/media/${id}/apply-suggestions`, {});
+  return apiPost<SocialMediaItem>(await scopedSocialPath(`/api/v1/social/media/${id}/apply-suggestions`), {});
 }
 
 export type SocialAnalytics = {
@@ -373,7 +403,7 @@ export type SocialAnalytics = {
 };
 
 export async function getSocialAnalytics(): Promise<SocialAnalytics> {
-  return apiGet<SocialAnalytics>("/api/v1/social/analytics");
+  return apiGet<SocialAnalytics>(await scopedSocialPath("/api/v1/social/analytics"));
 }
 
 export type ImportedTemplate = {

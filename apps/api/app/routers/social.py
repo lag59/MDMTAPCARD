@@ -2,6 +2,7 @@ import html
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
+from asyncio import create_task
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
@@ -32,6 +33,7 @@ from app.services import social_oauth
 from app.services import ai_suggestions
 from app.services import netlify
 from app.services.social_sync import sync_business
+from app.services import usage
 from app.utils.crypto import encrypt_token, generate_api_key
 
 router = APIRouter()
@@ -46,9 +48,9 @@ async def _resolve_scope(
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """Return (tenant_id, business_id). In v1 tenant_id == business_id == company.id."""
     if current_user.role == UserRole.super_admin:
-        business_id = requested_business_id or current_user.company_id
-        if not business_id:
+        if not requested_business_id:
             raise HTTPException(status_code=400, detail="business_id is required for super admins")
+        business_id = requested_business_id
     else:
         if not current_user.company_id:
             raise HTTPException(status_code=400, detail="User has no associated business")
@@ -318,6 +320,11 @@ async def bulk_media(
     await db.commit()
     if action in status_map:
         await _schedule_feed_build(db, bid)
+    # Record usage for media approval/publishing actions.
+    if action == "approve" and len(rows) > 0:
+        create_task(usage.record_event(tenant_id, bid, "media_approved", len(rows)))
+    elif action == "feature" and len(rows) > 0:
+        create_task(usage.record_event(tenant_id, bid, "media_published", len(rows)))
     return {"updated": len(rows)}
 
 
@@ -366,7 +373,7 @@ async def ai_suggest(
     db: Annotated[AsyncSession, Depends(get_db)],
     business_id: uuid.UUID | None = None,
 ) -> dict:
-    _, bid = await _resolve_scope(current_user, db, business_id)
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     item = await db.get(SocialMediaItem, item_id)
     if not item or item.business_id != bid:
         raise HTTPException(status_code=404, detail="Media item not found")
@@ -378,6 +385,8 @@ async def ai_suggest(
     item.ai_suggested_caption = suggestion.get("caption")
     item.ai_status = AiStatus.suggested
     await db.commit()
+    # Record AI request usage.
+    create_task(usage.record_event(tenant_id, bid, "ai_request", 1))
     await db.refresh(item)
     return _item_out(item)
 
@@ -406,6 +415,8 @@ async def apply_suggestions(
     item.ai_status = AiStatus.applied
     _audit(db, tenant_id, bid, current_user.id, "media.ai_applied", item.id)
     await db.commit()
+    # Record media publication via AI.
+    create_task(usage.record_event(tenant_id, bid, "media_published", 1))
     await db.refresh(item)
     return _item_out(item)
 
@@ -610,6 +621,10 @@ async def trigger_sync(
 ) -> dict:
     tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     result = await sync_business(db, tenant_id, bid)
+    # Record usage events as fire-and-forget.
+    create_task(usage.record_event(tenant_id, bid, "social_sync", 1))
+    if result.imported > 0:
+        create_task(usage.record_event(tenant_id, bid, "social_import", result.imported))
     return {"imported": result.imported, "skipped": result.skipped, "errors": result.errors}
 
 
@@ -621,6 +636,10 @@ async def trigger_sync_self(
 ) -> dict:
     tenant_id, bid = await _resolve_scope(current_user, db, business_id)
     result = await sync_business(db, tenant_id, bid)
+    # Record usage events as fire-and-forget.
+    create_task(usage.record_event(tenant_id, bid, "social_sync", 1))
+    if result.imported > 0:
+        create_task(usage.record_event(tenant_id, bid, "social_import", result.imported))
     return {"imported": result.imported, "skipped": result.skipped, "errors": result.errors}
 
 
@@ -723,3 +742,70 @@ async def regenerate_api_key(
     await db.commit()
     await db.refresh(key)
     return {**_key_out(key), "raw_key": raw}
+
+
+
+# ── Usage metering (Phase 4A) ─────────────────────────────────────────────────
+
+
+@router.get("/usage")
+async def get_usage(
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+    period: str = Query("current_month", enum=["current_month", "previous_month", "last_90_days"]),
+) -> dict:
+    """Get usage metrics for the specified period, with plan limits and warnings."""
+    tenant_id, bid = await _resolve_scope(current_user, db, business_id)
+
+    # Fetch company to get plan.
+    from app.models.company import Company
+    from app.core.plans import get_plan, plan_limits
+
+    company = await db.get(Company, bid)
+    if not company:
+        raise HTTPException(status_code=404, detail="Business not found")
+    
+    plan_name = company.autogallery_plan or "starter"
+    plan_obj = get_plan(plan_name)
+    limits = plan_limits(plan_name)
+
+    # Fetch usage data for the period.
+    usage_data = await usage.get_usage(db, bid, period)
+
+    # Build warnings for each limit.
+    warnings = {}
+    for limit_key, limit_value in limits.get("limits", {}).items():
+        if limit_value is None or limit_value == -1:
+            continue  # No limit for this metric
+        usage_value = usage_data.get(_usage_key_map(limit_key), 0)
+        usage_pct = int((usage_value / limit_value) * 100) if limit_value > 0 else 0
+        if usage_pct >= 100:
+            warnings[limit_key] = {"status": "exceeded", "value": usage_value, "limit": limit_value, "pct": 100}
+        elif usage_pct >= 80:
+            warnings[limit_key] = {"status": "warning", "value": usage_value, "limit": limit_value, "pct": usage_pct}
+
+    return {
+        "period": period,
+        "plan": {
+            "name": plan_name,
+            "price_monthly": plan_obj.get("price_monthly"),
+            "platforms": plan_obj.get("social_platforms", []),
+            "features": plan_obj.get("features", {}),
+        },
+        "usage": usage_data,
+        "limits": limits.get("limits", {}),
+        "warnings": warnings,
+    }
+
+
+def _usage_key_map(limit_key: str) -> str:
+    """Map limit config key to usage dict key."""
+    mapping = {
+        "imports": "imports",
+        "ai_calls": "aiCalls",
+        "rebuilds": "rebuilds",
+        "gallery_items": "approvedMedia",
+        "website_feeds": "feeds",
+    }
+    return mapping.get(limit_key, limit_key)

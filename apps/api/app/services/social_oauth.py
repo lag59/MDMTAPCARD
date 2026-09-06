@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 
 _STATE_TTL_SECONDS = 600
 
+# Read-only scopes used by the current AutoGallery importer. Do not add
+# publishing, messaging, or business-management permissions unless a feature
+# actually needs them and the corresponding provider review is complete.
+INSTAGRAM_READ_SCOPES = "instagram_basic,pages_show_list,pages_read_engagement"
+FACEBOOK_PAGE_READ_SCOPES = "pages_show_list,pages_read_engagement,pages_read_user_content"
+
 
 class OAuthError(Exception):
     pass
@@ -94,11 +100,7 @@ def build_authorize_url(platform: SocialPlatform, state: str) -> str:
 
     if platform in (SocialPlatform.facebook, SocialPlatform.instagram):
         cid, _ = _fb_creds(platform)
-        scope = (
-            "instagram_basic,pages_show_list,pages_read_engagement"
-            if platform == SocialPlatform.instagram
-            else "pages_show_list,pages_read_engagement,pages_read_user_content"
-        )
+        scope = INSTAGRAM_READ_SCOPES if platform == SocialPlatform.instagram else FACEBOOK_PAGE_READ_SCOPES
         v = settings.FACEBOOK_GRAPH_VERSION
         return (
             f"https://www.facebook.com/{v}/dialog/oauth?client_id={cid}"

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getAdminSystemStatus, getApiHealth } from "@/lib/api";
+import { getAdminSystemStatus, getApiHealth, getSocialAnalytics } from "@/lib/api";
 
 type SystemStatus = {
   api_version: string;
@@ -18,6 +18,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
 
   useEffect(() => {
     const token = window.localStorage.getItem("access_token");
@@ -32,6 +33,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     getAdminSystemStatus<SystemStatus>()
       .then((data) => setStatus(data))
       .catch(() => setStatus(null));
+    getSocialAnalytics()
+      .then((analytics) => setPendingApprovals(analytics.by_status.pending ?? 0))
+      .catch(() => setPendingApprovals(0));
   }, [pathname, router]);
 
   const handleLogout = () => {
@@ -82,7 +86,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             href={href}
             className="px-3 py-2 rounded-xl text-sm text-slate-100/95 hover:bg-white/12 transition"
           >
-            {label}
+            <span className="flex items-center justify-between gap-2">
+              {label}
+              {label === "AutoGallery" && pendingApprovals > 0 ? (
+                <span className="min-w-5 rounded-full bg-amber-400 px-1.5 py-0.5 text-center text-[10px] font-bold text-slate-950">
+                  {pendingApprovals > 99 ? "99+" : pendingApprovals}
+                </span>
+              ) : null}
+            </span>
           </Link>
         ))}
         <button

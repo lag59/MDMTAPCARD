@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listSocialConnections, disconnectSocial, getSocialAuthorizeUrl, syncSocialNow, type SocialConnectionInfo } from "@/lib/api";
+import {
+  apiGet,
+  disconnectSocial,
+  getAdminBusinessId,
+  getSocialAuthorizeUrl,
+  listSocialConnections,
+  setAdminBusinessId,
+  syncSocialNow,
+  type SocialConnectionInfo,
+} from "@/lib/api";
 
 const PLATFORM_LABELS: Record<string, string> = {
   instagram: "Instagram",
@@ -9,8 +18,14 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: "TikTok",
 };
 
+type Company = { id: string; name: string };
+type CurrentUser = { role: string; company_id: string | null };
+
 export default function SocialConnectionsPage() {
   const [connections, setConnections] = useState<SocialConnectionInfo[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -27,8 +42,36 @@ export default function SocialConnectionsPage() {
   };
 
   useEffect(() => {
-    load();
+    const initialize = async () => {
+      try {
+        const me = await apiGet<CurrentUser>("/api/v1/admin/me");
+        const superAdmin = me.role === "super_admin";
+        setIsSuperAdmin(superAdmin);
+
+        if (superAdmin) {
+          const available = await apiGet<Company[]>("/api/v1/admin/companies");
+          const saved = getAdminBusinessId();
+          const selected = available.some((company) => company.id === saved) ? saved : available[0]?.id ?? null;
+          setCompanies(available);
+          setSelectedBusinessId(selected);
+          if (selected) setAdminBusinessId(selected);
+        } else {
+          setSelectedBusinessId(me.company_id);
+        }
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not load social connections.");
+        setLoading(false);
+      }
+    };
+    initialize();
   }, []);
+
+  const selectBusiness = (businessId: string) => {
+    setAdminBusinessId(businessId);
+    setSelectedBusinessId(businessId);
+    void load();
+  };
 
   const disconnect = async (platform: string) => {
     try {
@@ -43,7 +86,7 @@ export default function SocialConnectionsPage() {
     setError(null);
     try {
       const { authorize_url } = await getSocialAuthorizeUrl(platform);
-      window.location.href = authorize_url;
+      window.open(authorize_url, "_self");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start connection.");
     }
@@ -70,6 +113,32 @@ export default function SocialConnectionsPage() {
         Connect your accounts so MDM TapCard can import your recent posts. We use each platform&apos;s official
         login — you never enter your social password here.
       </p>
+
+      {isSuperAdmin ? (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <label htmlFor="social-business" className="block text-sm font-semibold text-indigo-950">
+            Client business
+          </label>
+          <p className="mt-1 text-xs text-indigo-800">
+            Select the client whose social account you are connecting. They approve access on the social platform;
+            MDM TapCard never receives their password.
+          </p>
+          <select
+            id="social-business"
+            value={selectedBusinessId ?? ""}
+            onChange={(event) => selectBusiness(event.target.value)}
+            className="mt-3 w-full rounded-md border border-indigo-300 bg-white px-3 py-2 text-sm text-slate-800 sm:max-w-md"
+          >
+            <option value="" disabled>Select a client business</option>
+            {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+          </select>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          Connect your own social account below. Click Connect, sign in directly with the social platform, and approve
+          access there—never send your password to MDM TapCard or your administrator.
+        </div>
+      )}
 
       {error ? <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
       {info ? <div className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">{info}</div> : null}

@@ -40,6 +40,8 @@ class Company(Base):
     complimentary_nfc_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Paid analytics add-on: when True, the company owner can view captured leads and analytics.
     analytics_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # AutoGallery subscription tier (starter | professional | growth). See app/core/plans.py.
+    autogallery_plan: Mapped[str] = mapped_column(String(30), default="starter", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="company")

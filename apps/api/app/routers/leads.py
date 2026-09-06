@@ -14,8 +14,11 @@ import httpx
 
 from app.config import settings
 from app.core.deps import get_db
+from app.models.company import Company
 from app.models.events import Lead, LeadPhoneVerification
 from app.models.nfc_tag import NfcTag
+from app.models.profile import Profile
+from app.utils.email import send_email
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -221,4 +224,34 @@ async def submit_lead(
     )
     db.add(lead)
     await db.commit()
+
+    await _notify_owner_of_lead(db, body.profile_id, lead, source)
     return {"submitted": True}
+
+
+async def _notify_owner_of_lead(db: AsyncSession, profile_id: uuid.UUID, lead: Lead, source: str) -> None:
+    """Email the card owner about a new lead. Part of the paid analytics add-on and
+    best-effort: any failure is swallowed so it never breaks lead submission."""
+    profile = await db.get(Profile, profile_id)
+    if not profile or not profile.email:
+        return
+    company = await db.get(Company, profile.company_id)
+    if not company or not company.analytics_enabled:
+        return
+
+    contact_lines = []
+    if lead.phone:
+        contact_lines.append(f"Phone: {lead.phone}")
+    if lead.email:
+        contact_lines.append(f"Email: {lead.email}")
+
+    subject = f"New lead from {lead.name} — {profile.display_name}"
+    body_text = (
+        "You have a new lead from your MDM TapCard.\n\n"
+        f"Name: {lead.name}\n"
+        + ("\n".join(contact_lines) + "\n" if contact_lines else "")
+        + f"Message: {lead.message or '—'}\n"
+        f"Source: {source}\n\n"
+        "Log in to your MDM TapCard dashboard to view and follow up."
+    )
+    await send_email(profile.email, subject, body_text)
