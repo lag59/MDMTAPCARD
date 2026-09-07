@@ -28,6 +28,9 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [resetPassword, setResetPassword] = useState("");
+  const [textingUser, setTextingUser] = useState<ManagedUser | null>(null);
+  const [textPhone, setTextPhone] = useState("");
+  const [textPassword, setTextPassword] = useState("");
   const [createForm, setCreateForm] = useState({
     name: "",
     email: "",
@@ -136,22 +139,38 @@ export default function AdminUsersPage() {
     }
   };
 
-  const textCredentials = async (user: ManagedUser) => {
+  const openEditor = (user: ManagedUser) => {
+    setEditingUser({ ...user });
+    setResetPassword("");
+    window.setTimeout(() => document.getElementById("edit-user")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
+
+  const openTextCredentials = (user: ManagedUser) => {
+    setTextingUser(user);
+    setTextPhone(user.phone || user.card_phone || "");
+    setTextPassword("");
     setError(null);
     setSuccess(null);
-    const phone = user.phone || user.card_phone || window.prompt(`Mobile number for ${user.name}:`, "");
-    if (!phone) return;
-    const password = window.prompt("New temporary password to text (minimum 8 characters):", "");
-    if (!password) return;
-    if (password.length < 8) {
+  };
+
+  const textCredentials = async () => {
+    if (!textingUser) return;
+    setError(null);
+    setSuccess(null);
+    if (!textPhone.trim()) {
+      setError("A mobile number is required.");
+      return;
+    }
+    if (textPassword.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
     }
     setSubmitting(true);
     try {
-      await apiPost(`/api/v1/admin/users/${user.id}/text-credentials`, { phone, password });
-      setUsers((all) => all.map((entry) => entry.id === user.id ? { ...entry, phone } : entry));
-      setSuccess(`Texted login credentials to ${user.name}.`);
+      await apiPost(`/api/v1/admin/users/${textingUser.id}/text-credentials`, { phone: textPhone.trim(), password: textPassword });
+      setUsers((all) => all.map((entry) => entry.id === textingUser.id ? { ...entry, phone: textPhone.trim() } : entry));
+      setSuccess(`Texted login credentials to ${textingUser.name}.`);
+      setTextingUser(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not text credentials.");
     } finally {
@@ -191,13 +210,13 @@ export default function AdminUsersPage() {
           {users.map((user) => <div key={user.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
             <div className="min-w-0 flex-1"><p className="font-medium text-slate-800">{user.name}</p><p className="truncate text-xs text-slate-500">{user.email} · {user.role} · {user.company_name ?? "No company"}</p></div>
             <span className={`rounded-full px-2 py-1 text-xs ${user.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{user.is_active ? "Active" : "Inactive"}</span>
-            <button type="button" onClick={() => textCredentials(user)} disabled={submitting} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-700 disabled:opacity-50">Text credentials</button>
-            <button type="button" onClick={() => { setEditingUser({ ...user }); setResetPassword(""); }} disabled={submitting} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 disabled:opacity-50">Edit</button>
+            <button type="button" onClick={() => openTextCredentials(user)} disabled={submitting} className="rounded border border-emerald-300 px-2 py-1 text-xs text-emerald-700 disabled:opacity-50">Text credentials</button>
+            <button type="button" onClick={() => openEditor(user)} disabled={submitting} className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 disabled:opacity-50">Edit</button>
           </div>)}
         </div>
       </section> : null}
 
-      {editingUser ? <section className="mt-6 rounded-xl bg-white p-6 shadow">
+      {editingUser ? <section id="edit-user" className="mt-6 rounded-xl bg-white p-6 shadow">
         <h2 className="text-lg font-semibold text-slate-800">Edit User</h2>
         <form onSubmit={(event) => { event.preventDefault(); void saveUser(); }} className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Name"><input value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className={inputClass} required /></Field>
@@ -210,6 +229,17 @@ export default function AdminUsersPage() {
           <div className="flex gap-2 sm:col-span-2"><button type="submit" disabled={submitting} className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{submitting ? "Saving…" : "Save changes"}</button><button type="button" onClick={() => setEditingUser(null)} disabled={submitting} className="rounded border border-slate-300 px-3 py-2 text-sm disabled:opacity-50">Cancel</button></div>
         </form>
       </section> : null}
+
+      {textingUser ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="text-credentials-title">
+        <form onSubmit={(event) => { event.preventDefault(); void textCredentials(); }} className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+          <h2 id="text-credentials-title" className="text-lg font-semibold text-slate-800">Text Credentials</h2>
+          <p className="mt-1 text-sm text-slate-500">Set a new temporary password and send it to {textingUser.name}.</p>
+          <label className="mt-4 flex flex-col gap-1 text-sm font-medium text-slate-700">Mobile number<input type="tel" value={textPhone} onChange={(event) => setTextPhone(event.target.value)} className={inputClass} placeholder="+1 555 123 4567" required /></label>
+          <label className="mt-3 flex flex-col gap-1 text-sm font-medium text-slate-700">New temporary password<input type="password" value={textPassword} onChange={(event) => setTextPassword(event.target.value)} className={inputClass} minLength={8} required /></label>
+          <p className="mt-2 text-xs text-amber-700">This resets the account password before sending the text.</p>
+          <div className="mt-5 flex gap-2"><button type="submit" disabled={submitting} className="rounded bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{submitting ? "Sending…" : "Reset & text"}</button><button type="button" disabled={submitting} onClick={() => setTextingUser(null)} className="rounded border border-slate-300 px-3 py-2 text-sm">Cancel</button></div>
+        </form>
+      </div> : null}
     </div>
   );
 }
