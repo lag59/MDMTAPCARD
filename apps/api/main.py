@@ -67,6 +67,8 @@ async def _schema_guard_startup() -> None:
     async with engine.begin() as conn:
         await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS card_type VARCHAR(30) NOT NULL DEFAULT 'digital_only'"))
         await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fulfillment_status VARCHAR(40) NOT NULL DEFAULT 'not_required'"))
+        await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS photo_position VARCHAR(40) NOT NULL DEFAULT 'center center'"))
+        await conn.execute(text("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS photo_size VARCHAR(20) NOT NULL DEFAULT 'medium'"))
         await conn.execute(
             text(
                 """

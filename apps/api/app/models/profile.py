@@ -22,6 +22,8 @@ class Profile(Base):
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     biography: Mapped[str | None] = mapped_column(Text, nullable=True)
     photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    photo_position: Mapped[str] = mapped_column(String(40), default="center center")
+    photo_size: Mapped[str] = mapped_column(String(20), default="medium")
     theme_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     custom_theme: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON for uploaded custom templates
     # Per-profile background: saved only on this profile, not shared across a template.

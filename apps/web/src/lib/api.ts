@@ -549,6 +549,13 @@ export async function uploadProfileBackground(slug: string, file: File): Promise
   return (await res.json()) as import("./types").Profile;
 }
 
+export async function updateProfileBackgroundSettings(
+  slug: string,
+  updates: Partial<Pick<import("./types").TemplateBackground, "position" | "size_mode" | "opacity" | "overlay_color" | "overlay_opacity" | "text_color">>,
+): Promise<import("./types").Profile> {
+  return apiPatch<import("./types").Profile>(`/api/v1/profiles/${slug}/background`, updates);
+}
+
 export async function deleteProfileBackground(slug: string): Promise<import("./types").Profile> {
   return apiDeleteJson<import("./types").Profile>(`/api/v1/profiles/${slug}/background`);
 }

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import TemplatePreview from "./TemplatePreview";
 import { TEMPLATES, isValidCustomTheme } from "@/lib/templates";
-import { apiGet, listReusableTemplates, uploadLogo, uploadProfileBackground, deleteProfileBackground, type ImportedTemplate } from "@/lib/api";
+import { apiGet, listReusableTemplates, uploadLogo, uploadProfileBackground, deleteProfileBackground, updateProfileBackgroundSettings, type ImportedTemplate } from "@/lib/api";
 import type { TemplateBackground } from "@/lib/types";
 
 const PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "youtube"] as const;
@@ -13,6 +13,8 @@ export interface CardFormValues {
   display_name: string;
   title: string;
   photo_url: string;
+  photo_position: string;
+  photo_size: string;
   phone: string;
   email: string;
   website: string;
@@ -42,6 +44,8 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
     display_name: initial?.display_name ?? "",
     title: initial?.title ?? "",
     photo_url: initial?.photo_url ?? "",
+    photo_position: initial?.photo_position ?? "center center",
+    photo_size: initial?.photo_size ?? "medium",
     phone: initial?.phone ?? "",
     email: initial?.email ?? "",
     website: initial?.website ?? "",
@@ -69,6 +73,16 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
   const [reusableTemplates, setReusableTemplates] = useState<ImportedTemplate[]>([]);
   const customFileRef = useRef<HTMLInputElement>(null);
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(initialBackground?.image_url ?? null);
+  const [backgroundSettings, setBackgroundSettings] = useState<TemplateBackground>({
+    image_url: initialBackground?.image_url ?? null,
+    position: initialBackground?.position ?? "center center",
+    size_mode: initialBackground?.size_mode ?? "cover",
+    opacity: initialBackground?.opacity ?? 1,
+    overlay_color: initialBackground?.overlay_color ?? "#000000",
+    overlay_opacity: initialBackground?.overlay_opacity ?? 0,
+    text_color: initialBackground?.text_color ?? null,
+    lock_background: false,
+  });
   const [uploadingBackground, setUploadingBackground] = useState(false);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const backgroundFileRef = useRef<HTMLInputElement>(null);
@@ -168,6 +182,19 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
     }
   };
 
+  const saveBackgroundSettings = async (updates: Partial<TemplateBackground>) => {
+    if (!slug) return;
+    const next = { ...backgroundSettings, ...updates };
+    setBackgroundSettings(next);
+    setBackgroundError(null);
+    try {
+      await updateProfileBackgroundSettings(slug, updates);
+    } catch (err) {
+      setBackgroundSettings(backgroundSettings);
+      setBackgroundError(err instanceof Error ? err.message : "Could not save background settings.");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -232,6 +259,26 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
           <p className="mt-2 text-xs text-slate-500">
             {uploadingLogo ? "Uploading…" : "Upload a JPG, PNG, or WebP photo, or paste an image URL. If none is set, the card shows initials automatically."}
           </p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <label className={label}>
+              Photo focal point
+              <select className={input} value={values.photo_position} onChange={set("photo_position")}>
+                <option value="center center">Center</option>
+                <option value="top center">Top</option>
+                <option value="bottom center">Bottom</option>
+                <option value="left center">Left</option>
+                <option value="right center">Right</option>
+              </select>
+            </label>
+            <label className={label}>
+              Photo display size
+              <select className={input} value={values.photo_size} onChange={set("photo_size")}>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+          </div>
           {values.photo_url ? (
             <div className="mt-3 flex items-center gap-3">
               <Image
@@ -456,6 +503,36 @@ export default function CardForm({ initial, onSubmit, submitLabel, slug, initial
             </button>
           )}
           {backgroundError ? <p className="mt-2 text-xs text-red-600">{backgroundError}</p> : null}
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3">
+            <label className={label}>
+              Background focal point
+              <select className={input} value={backgroundSettings.position} onChange={(e) => void saveBackgroundSettings({ position: e.target.value })}>
+                <option value="center center">Center</option><option value="top center">Top</option><option value="bottom center">Bottom</option><option value="left center">Left</option><option value="right center">Right</option>
+              </select>
+            </label>
+            <label className={label}>
+              Background fit
+              <select className={input} value={backgroundSettings.size_mode} onChange={(e) => void saveBackgroundSettings({ size_mode: e.target.value as "cover" | "contain" })}>
+                <option value="cover">Cover (fills screen)</option><option value="contain">Contain (show whole image)</option>
+              </select>
+            </label>
+            <label className={label}>
+              Background opacity: {Math.round(backgroundSettings.opacity * 100)}%
+              <input type="range" min="0" max="1" step="0.05" value={backgroundSettings.opacity} onChange={(e) => void saveBackgroundSettings({ opacity: Number(e.target.value) })} className="mt-2 w-full" />
+            </label>
+            <label className={label}>
+              Overlay opacity: {Math.round(backgroundSettings.overlay_opacity * 100)}%
+              <input type="range" min="0" max="1" step="0.05" value={backgroundSettings.overlay_opacity} onChange={(e) => void saveBackgroundSettings({ overlay_opacity: Number(e.target.value) })} className="mt-2 w-full" />
+            </label>
+            <label className={`${label} col-span-2`}>
+              Overlay color
+              <input type="color" value={backgroundSettings.overlay_color ?? "#000000"} onChange={(e) => void saveBackgroundSettings({ overlay_color: e.target.value })} className="mt-1 h-8 w-full rounded border border-slate-200" />
+            </label>
+            <label className={`${label} col-span-2`}>
+              Profile text color
+              <div className="flex gap-2"><input type="color" value={backgroundSettings.text_color ?? "#ffffff"} onChange={(e) => void saveBackgroundSettings({ text_color: e.target.value })} className="h-8 w-14 rounded border border-slate-200" /><button type="button" onClick={() => void saveBackgroundSettings({ text_color: null })} className="rounded border border-slate-300 px-3 text-xs text-slate-700">Automatic</button></div>
+            </label>
+          </div>
           <input
             ref={backgroundFileRef}
             type="file"

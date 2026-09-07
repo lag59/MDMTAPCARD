@@ -47,6 +47,8 @@ class ProfileCreate(BaseModel):
     display_name: str
     title: str | None = None
     photo_url: str | None = None
+    photo_position: str = "center center"
+    photo_size: str = "medium"
     phone: str | None = None
     email: EmailStr | None = None
     website: str | None = None
@@ -463,6 +465,8 @@ class ProfileUpdate(BaseModel):
     display_name: str | None = None
     title: str | None = None
     photo_url: str | None = None
+    photo_position: str | None = None
+    photo_size: str | None = None
     phone: str | None = None
     email: EmailStr | None = None
     website: str | None = None

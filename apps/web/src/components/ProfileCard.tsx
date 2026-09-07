@@ -137,7 +137,10 @@ export default function ProfileCard({ profile, tagToken, preview = false }: Prop
       <img
         src={profile.photo_url}
         alt={profile.display_name}
-        className={`${size} rounded-full object-cover ring-4 ring-white/30 shadow-2xl`}
+        className={`${size} rounded-full object-cover ring-4 ring-white/30 shadow-2xl ${
+          profile.photo_size === "small" ? "scale-90" : profile.photo_size === "large" ? "scale-110" : ""
+        }`}
+        style={{ objectPosition: profile.photo_position ?? "center center" }}
       />
     ) : (
       <div className={`${size} rounded-full bg-white/20 flex items-center justify-center shadow-2xl ring-4 ring-white/20`}>

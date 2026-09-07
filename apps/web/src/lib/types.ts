@@ -33,6 +33,8 @@ export interface Profile {
   address?: string;
   biography?: string;
   photo_url?: string;
+  photo_position?: string;
+  photo_size?: string;
   whatsapp_number?: string;
   language: "en" | "es";
   theme_id?: string;

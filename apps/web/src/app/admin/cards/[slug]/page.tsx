@@ -140,6 +140,8 @@ export default function EditCardPage() {
     display_name: profile.display_name,
     title: profile.title ?? "",
     photo_url: profile.photo_url ?? "",
+    photo_position: profile.photo_position ?? "center center",
+    photo_size: profile.photo_size ?? "medium",
     phone: profile.phone ?? "",
     email: profile.email ?? "",
     website: profile.website ?? "",
