@@ -114,8 +114,20 @@ def build_authorize_url(platform: SocialPlatform, state: str) -> str:
 
     if platform == SocialPlatform.facebook:
         cid, _ = _fb_creds(platform)
-        scope = FACEBOOK_PAGE_READ_SCOPES
         v = settings.FACEBOOK_GRAPH_VERSION
+        if settings.FACEBOOK_LOGIN_CONFIG_ID:
+            from urllib.parse import urlencode
+
+            return "https://www.facebook.com/" + v + "/dialog/oauth?" + urlencode(
+                {
+                    "client_id": cid,
+                    "redirect_uri": redirect,
+                    "state": state,
+                    "response_type": "code",
+                    "config_id": settings.FACEBOOK_LOGIN_CONFIG_ID,
+                }
+            )
+        scope = FACEBOOK_PAGE_READ_SCOPES
         return (
             f"https://www.facebook.com/{v}/dialog/oauth?client_id={cid}"
             f"&redirect_uri={redirect}&state={state}&response_type=code&scope={scope}"

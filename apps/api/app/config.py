@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     FACEBOOK_GRAPH_VERSION: str = "v21.0"
     FACEBOOK_CLIENT_ID: str = ""
     FACEBOOK_CLIENT_SECRET: str = ""
+    # Facebook Login for Business configuration created in Meta App Dashboard.
+    # When set, the authorization request uses config_id instead of raw scopes.
+    FACEBOOK_LOGIN_CONFIG_ID: str = ""
     # Instagram uses the separate Business Login for Instagram app credentials.
     INSTAGRAM_CLIENT_ID: str = ""
     INSTAGRAM_CLIENT_SECRET: str = ""
