@@ -1,12 +1,14 @@
 import html
+import io
 import json
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
 from asyncio import create_task
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import RedirectResponse
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 from slugify import slugify
 from sqlalchemy import func, select
@@ -22,6 +24,7 @@ from app.models.social import (
     ConnectionStatus,
     FeedLayout,
     FeedStatus,
+    MediaType,
     SocialAuditEvent,
     SocialConnection,
     SocialMediaItem,
@@ -36,6 +39,7 @@ from app.services import netlify
 from app.services.social_sync import sync_business
 from app.services import usage
 from app.utils.crypto import decrypt_token, encrypt_token, generate_api_key
+from app.utils.storage import save_public_asset
 
 router = APIRouter()
 
@@ -218,6 +222,64 @@ class MediaItemUpdate(BaseModel):
 class BulkAction(BaseModel):
     ids: list[uuid.UUID]
     action: str  # approve | hide | reject | feature | unfeature
+
+
+@router.post("/media/upload", status_code=201)
+async def upload_manual_media(
+    file: Annotated[UploadFile, File(...)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.super_admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID = Form(...),
+    caption: str | None = Form(None),
+    alt_text: str | None = Form(None),
+    category: str | None = Form(None),
+) -> dict:
+    """Upload a client image into that business's pending website gallery."""
+    company = await db.get(Company, business_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="Business not found")
+    if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, and WebP images are supported")
+
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large (maximum 15 MB)")
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="The uploaded file is not a valid image") from exc
+
+    item_id = uuid.uuid4()
+    key = f"social-media/{business_id}/manual/{item_id}.webp"
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image = image.convert("RGB")
+            output = io.BytesIO()
+            image.save(output, format="WEBP", quality=88, method=6)
+            media_url = save_public_asset(key, output.getvalue(), content_type="image/webp")
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Could not process the uploaded image") from exc
+
+    item = SocialMediaItem(
+        id=item_id,
+        tenant_id=business_id,
+        business_id=business_id,
+        platform=SocialPlatform.manual,
+        external_media_id=f"manual:{item_id}",
+        media_type=MediaType.image,
+        media_url=media_url,
+        thumbnail_url=media_url,
+        caption=html.escape(caption or "")[:2000] or None,
+        alt_text=html.escape(alt_text or "")[:500] or None,
+        category=slugify(category or "")[:120] or None,
+        approval_status=ApprovalStatus.pending,
+    )
+    db.add(item)
+    _audit(db, business_id, business_id, current_user.id, "media.manual_uploaded", item.id)
+    await db.commit()
+    await db.refresh(item)
+    return _item_out(item)
 
 
 @router.get("/media")

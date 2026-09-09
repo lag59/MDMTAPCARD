@@ -23,6 +23,7 @@ class SocialPlatform(str, enum.Enum):
     instagram = "instagram"
     facebook = "facebook"
     tiktok = "tiktok"
+    manual = "manual"
 
 
 class ConnectionStatus(str, enum.Enum):

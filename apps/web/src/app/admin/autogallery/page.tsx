@@ -7,12 +7,13 @@ import {
   bulkSocialMedia,
   aiSuggestMedia,
   applyMediaSuggestions,
+  uploadManualSocialMedia,
   type SocialMediaItem,
 } from "@/lib/api";
 
-type Filter = "all" | "pending" | "approved" | "hidden" | "instagram" | "facebook" | "tiktok" | "featured";
+type Filter = "all" | "pending" | "approved" | "hidden" | "instagram" | "facebook" | "tiktok" | "manual" | "featured";
 
-const FILTERS: Filter[] = ["all", "pending", "approved", "hidden", "instagram", "facebook", "tiktok", "featured"];
+const FILTERS: Filter[] = ["all", "pending", "approved", "hidden", "instagram", "facebook", "tiktok", "manual", "featured"];
 
 function filterParams(filter: Filter): Record<string, string> {
   if (filter === "all") return {};
@@ -27,6 +28,8 @@ export default function AutoGalleryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const [isSuperAdmin] = useState(() => typeof window !== "undefined" && window.localStorage.getItem("user_role") === "super_admin");
 
   const load = async (f: Filter) => {
     setLoading(true);
@@ -42,8 +45,8 @@ export default function AutoGalleryPage() {
   };
 
   useEffect(() => {
-    load(filter);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = window.setTimeout(() => { void load(filter); }, 0);
+    return () => window.clearTimeout(timer);
   }, [filter]);
 
   const patchItem = async (id: string, updates: Partial<SocialMediaItem>) => {
@@ -58,7 +61,8 @@ export default function AutoGalleryPage() {
   const toggleSelect = (id: string) =>
     setSelected((s) => {
       const next = new Set(s);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
 
@@ -90,6 +94,22 @@ export default function AutoGalleryPage() {
     }
   };
 
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        await uploadManualSocialMedia(file);
+      }
+      await load(filter);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not upload media.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const statusBadge = (s: SocialMediaItem["approval_status"]) => {
     const map: Record<string, string> = {
       approved: "bg-emerald-100 text-emerald-700",
@@ -106,6 +126,15 @@ export default function AutoGalleryPage() {
       <p className="text-sm text-slate-500">
         Imported social media. New posts start as <strong>pending</strong> and must be approved before they appear on the public website.
       </p>
+
+      {isSuperAdmin ? <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+        <p className="text-sm font-semibold text-indigo-950">Upload website photos</p>
+        <p className="mt-1 text-xs text-indigo-800">Super admins can add photos directly for the selected client business. Uploads remain pending until approved.</p>
+        <label className="mt-3 inline-flex cursor-pointer rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">
+          {uploading ? "Uploading…" : "Choose photos"}
+          <input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploading} onChange={(e) => { void uploadFiles(e.target.files); e.currentTarget.value = ""; }} className="hidden" />
+        </label>
+      </div> : null}
 
       {error ? <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 

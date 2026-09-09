@@ -346,6 +346,27 @@ export async function listSocialMedia(params: Record<string, string> = {}): Prom
   return apiGet<SocialMediaItem[]>(`/api/v1/social/media${query ? `?${query}` : ""}`);
 }
 
+export async function uploadManualSocialMedia(file: File, metadata: { caption?: string; alt_text?: string; category?: string } = {}): Promise<SocialMediaItem> {
+  const token = window.localStorage.getItem("access_token");
+  if (!token) throw new Error("No access token found. Please sign in again.");
+  const scoped = await scopedSocialPath("/api/v1/social/media/upload");
+  const businessId = new URL(scoped, "http://localhost").searchParams.get("business_id");
+  if (!businessId) throw new Error("Select a business before uploading media.");
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("business_id", businessId);
+  if (metadata.caption) form.append("caption", metadata.caption);
+  if (metadata.alt_text) form.append("alt_text", metadata.alt_text);
+  if (metadata.category) form.append("category", metadata.category);
+
+  const path = "/api/v1/social/media/upload";
+  let response = await fetch(proxied(path), { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  if (response.status === 405) response = await fetch(`${BASE_URL}${path}`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  if (!response.ok) throw new Error(`Upload failed (${response.status})`);
+  return (await response.json()) as SocialMediaItem;
+}
+
 export async function updateSocialMedia(id: string, updates: Partial<Pick<SocialMediaItem, "approval_status" | "featured" | "caption" | "alt_text" | "category">>): Promise<SocialMediaItem> {
   return apiPatch<SocialMediaItem>(await scopedSocialPath(`/api/v1/social/media/${id}`), updates);
 }
