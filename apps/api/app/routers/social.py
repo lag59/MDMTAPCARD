@@ -1,4 +1,5 @@
 import html
+import json
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -34,7 +35,7 @@ from app.services import ai_suggestions
 from app.services import netlify
 from app.services.social_sync import sync_business
 from app.services import usage
-from app.utils.crypto import encrypt_token, generate_api_key
+from app.utils.crypto import decrypt_token, encrypt_token, generate_api_key
 
 router = APIRouter()
 
@@ -520,6 +521,11 @@ async def list_connections(
                 "last_sync_at": conn.last_sync_at.isoformat() if conn and conn.last_sync_at else None,
                 "connected_at": conn.connected_at.isoformat() if conn and conn.connected_at else None,
                 "last_error": conn.last_error if conn else None,
+                "selected_account_id": conn.selected_account_id if conn else None,
+                "import_mode": conn.import_mode if conn else "recent",
+                "require_approval": conn.require_approval if conn else True,
+                "auto_publish": conn.auto_publish if conn else False,
+                "available_account_count": len(json.loads(decrypt_token(conn.available_accounts_encrypted) or "[]")) if conn and conn.available_accounts_encrypted else 0,
             }
         )
     return out
@@ -549,6 +555,63 @@ async def disconnect(
     conn.token_expires_at = None
     await db.commit()
     return {"platform": platform.value, "status": conn.status.value}
+
+
+class ConnectionPreferences(BaseModel):
+    selected_account_id: str | None = None
+    selected_album_ids: list[str] = []
+    import_mode: str = "recent"
+    require_approval: bool = True
+    auto_publish: bool = False
+
+
+@router.get("/connections/{platform}/accounts")
+async def list_connected_accounts(
+    platform: SocialPlatform,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> list[dict]:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+    conn = (await db.execute(select(SocialConnection).where(SocialConnection.business_id == bid, SocialConnection.platform == platform))).scalar_one_or_none()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    accounts = json.loads(decrypt_token(conn.available_accounts_encrypted or "[]") or "[]")
+    return [{"id": a.get("id"), "name": a.get("name"), "selected": a.get("id") == conn.selected_account_id} for a in accounts]
+
+
+@router.patch("/connections/{platform}/preferences")
+async def update_connection_preferences(
+    platform: SocialPlatform,
+    body: ConnectionPreferences,
+    current_user: Annotated[User, AdminOrOwner],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    business_id: uuid.UUID | None = None,
+) -> dict:
+    _, bid = await _resolve_scope(current_user, db, business_id)
+    conn = (await db.execute(select(SocialConnection).where(SocialConnection.business_id == bid, SocialConnection.platform == platform))).scalar_one_or_none()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    accounts = json.loads(decrypt_token(conn.available_accounts_encrypted or "[]") or "[]")
+    allowed_ids = {str(a.get("id")) for a in accounts}
+    if body.selected_account_id and body.selected_account_id not in allowed_ids:
+        raise HTTPException(status_code=400, detail="Selected account is not available")
+    if body.import_mode not in {"recent", "last_10", "last_25", "last_50", "selected_album"}:
+        raise HTTPException(status_code=400, detail="Invalid import mode")
+    conn.selected_account_id = body.selected_account_id or conn.selected_account_id
+    conn.selected_album_ids = json.dumps(body.selected_album_ids)
+    conn.import_mode = body.import_mode
+    conn.require_approval = body.require_approval
+    conn.auto_publish = body.auto_publish
+    if conn.auto_publish:
+        conn.require_approval = False
+    selected = next((a for a in accounts if str(a.get("id")) == conn.selected_account_id), None)
+    if selected:
+        conn.platform_account_id = selected["id"]
+        conn.platform_username = selected.get("name")
+        conn.access_token_encrypted = encrypt_token(selected["access_token"])
+    await db.commit()
+    return {"platform": platform.value, "selected_account_id": conn.selected_account_id, "import_mode": conn.import_mode, "require_approval": conn.require_approval, "auto_publish": conn.auto_publish}
 
 
 @router.get("/connections/{platform}/authorize")
@@ -610,6 +673,9 @@ async def oauth_callback(
     conn.refresh_token_encrypted = encrypt_token(result.refresh_token) if result.refresh_token else None
     conn.token_expires_at = result.token_expires_at
     conn.scopes = result.scopes
+    if result.available_accounts:
+        conn.available_accounts_encrypted = encrypt_token(json.dumps(result.available_accounts))
+        conn.selected_account_id = result.platform_account_id
     conn.status = ConnectionStatus.connected
     conn.last_error = None
     conn.connected_at = datetime.now(timezone.utc)

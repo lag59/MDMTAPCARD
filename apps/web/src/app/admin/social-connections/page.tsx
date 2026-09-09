@@ -6,9 +6,12 @@ import {
   disconnectSocial,
   getAdminBusinessId,
   getSocialAuthorizeUrl,
+  listSocialAccounts,
   listSocialConnections,
   setAdminBusinessId,
   syncSocialNow,
+  updateSocialPreferences,
+  type SocialAccountOption,
   type SocialConnectionInfo,
 } from "@/lib/api";
 
@@ -29,6 +32,11 @@ export default function SocialConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [facebookAccounts, setFacebookAccounts] = useState<SocialAccountOption[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState("");
+  const [importMode, setImportMode] = useState("recent");
+  const [requireApproval, setRequireApproval] = useState(true);
+  const [autoPublish, setAutoPublish] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -101,6 +109,31 @@ export default function SocialConnectionsPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sync failed.");
+    }
+  };
+
+  const loadFacebookPages = async () => {
+    try {
+      const pages = await listSocialAccounts("facebook");
+      setFacebookAccounts(pages);
+      setSelectedPageId(pages.find((page) => page.selected)?.id ?? pages[0]?.id ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load Facebook Pages.");
+    }
+  };
+
+  const saveFacebookSettings = async () => {
+    try {
+      await updateSocialPreferences("facebook", {
+        selected_account_id: selectedPageId || null,
+        import_mode: importMode,
+        require_approval: requireApproval,
+        auto_publish: autoPublish,
+      });
+      setInfo("Facebook import settings saved. Manual approval remains enabled by default.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save Facebook settings.");
     }
   };
 
@@ -179,6 +212,20 @@ export default function SocialConnectionsPage() {
                   <button onClick={() => disconnect(c.platform)} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50">
                     Disconnect
                   </button>
+                ) : null}
+                {connections.some((connection) => connection.platform === "facebook" && connection.status === "connected") ? (
+                  <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <h2 className="text-lg font-semibold text-slate-800">Facebook Page Import</h2>
+                    <p className="mt-1 text-sm text-slate-500">Choose the Page to import. New photos remain pending until approved.</p>
+                    <button type="button" onClick={() => void loadFacebookPages()} className="mt-3 rounded border border-blue-300 px-3 py-2 text-xs font-semibold text-blue-700">Load available Pages</button>
+                    {facebookAccounts.length > 0 ? <div className="mt-3 space-y-3">
+                      <label className="block text-sm text-slate-700">Page<select value={selectedPageId} onChange={(e) => setSelectedPageId(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm">{facebookAccounts.map((page) => <option key={page.id} value={page.id}>{page.name || page.id}</option>)}</select></label>
+                      <label className="block text-sm text-slate-700">Import<select value={importMode} onChange={(e) => setImportMode(e.target.value)} className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"><option value="recent">Recent photos</option><option value="last_10">Last 10</option><option value="last_25">Last 25</option><option value="last_50">Last 50</option><option value="selected_album">Selected album (coming next)</option></select></label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={requireApproval} onChange={(e) => { setRequireApproval(e.target.checked); if (e.target.checked) setAutoPublish(false); }} /> Require manual approval</label>
+                      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={autoPublish} onChange={(e) => { setAutoPublish(e.target.checked); if (e.target.checked) setRequireApproval(false); }} /> Auto-publish new photos</label>
+                      <button type="button" onClick={() => void saveFacebookSettings()} className="rounded bg-slate-900 px-3 py-2 text-xs font-semibold text-white">Save Facebook import settings</button>
+                    </div> : null}
+                  </section>
                 ) : null}
                 <button
                   onClick={syncNow}

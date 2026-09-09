@@ -7,6 +7,7 @@ response into NormalizedItem for the sync service.
 """
 
 import logging
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -51,6 +52,7 @@ class ExchangeResult:
     refresh_token: str | None
     token_expires_at: datetime | None
     scopes: str | None
+    available_accounts: list[dict] | None = None
 
 
 def _redirect_uri(platform: SocialPlatform) -> str:
@@ -271,6 +273,11 @@ async def _exchange_facebook(platform: SocialPlatform, code: str) -> ExchangeRes
             refresh_token=None,
             token_expires_at=None,
             scopes="pages_read_engagement,pages_read_user_content",
+            available_accounts=[
+                {"id": p.get("id"), "name": p.get("name"), "access_token": p.get("access_token")}
+                for p in pages
+                if p.get("id") and p.get("access_token")
+            ],
         )
 
 

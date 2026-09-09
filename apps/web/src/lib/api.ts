@@ -283,7 +283,14 @@ export type SocialConnectionInfo = {
   last_sync_at: string | null;
   connected_at: string | null;
   last_error: string | null;
+  selected_account_id?: string | null;
+  import_mode?: string;
+  require_approval?: boolean;
+  auto_publish?: boolean;
+  available_account_count?: number;
 };
+
+export type SocialAccountOption = { id: string; name: string | null; selected: boolean };
 
 export type WebsiteApiKeyInfo = {
   id: string;
@@ -361,6 +368,20 @@ export async function getSocialAuthorizeUrl(platform: string): Promise<{ authori
 
 export async function syncSocialNow(): Promise<{ imported: number; skipped: number; errors: string[] }> {
   return apiPost<{ imported: number; skipped: number; errors: string[] }>(await scopedSocialPath("/api/v1/social/sync"), {});
+}
+
+export async function listSocialAccounts(platform: string): Promise<SocialAccountOption[]> {
+  return apiGet<SocialAccountOption[]>(await scopedSocialPath(`/api/v1/social/connections/${platform}/accounts`));
+}
+
+export async function updateSocialPreferences(platform: string, preferences: {
+  selected_account_id?: string | null;
+  selected_album_ids?: string[];
+  import_mode?: string;
+  require_approval?: boolean;
+  auto_publish?: boolean;
+}): Promise<Record<string, unknown>> {
+  return apiPatch<Record<string, unknown>>(await scopedSocialPath(`/api/v1/social/connections/${platform}/preferences`), preferences);
 }
 
 export async function listWebsiteApiKeys(): Promise<WebsiteApiKeyInfo[]> {
